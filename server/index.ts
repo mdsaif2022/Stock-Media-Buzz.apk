@@ -72,6 +72,7 @@ export function createServer() {
   // Media routes
   app.get("/api/media", mediaRoutes.getMedia);
   app.get("/api/media/trending", mediaRoutes.getTrendingMedia);
+  app.get("/api/media/categories/summary", mediaRoutes.getCategorySummary);
   app.get("/api/media/:id", mediaRoutes.getMediaById);
   app.post("/api/media", mediaRoutes.createMedia); // Admin only
   app.put("/api/media/:id", mediaRoutes.updateMedia); // Admin only

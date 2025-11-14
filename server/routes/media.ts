@@ -105,6 +105,7 @@ async function saveMediaDatabase(data: Media[]): Promise<void> {
 
 // Initialize mediaDatabase - start with default data, load async
 let mediaDatabase: Media[] = [...DEFAULT_MEDIA];
+const CATEGORY_KEYS: Media["category"][] = ["video", "image", "audio", "template", "apk"];
 
 // Load database from file on startup
 loadMediaDatabase()
@@ -121,7 +122,13 @@ export { mediaDatabase, saveMediaDatabase };
 
 // Get all media with pagination and filtering
 export const getMedia: RequestHandler = (req, res) => {
-  const { page = 1, pageSize = 20, category, search } = req.query;
+  const { page = 1, pageSize = 20, category, search, sort = "latest" } = req.query as {
+    page?: string | number;
+    pageSize?: string | number;
+    category?: string;
+    search?: string;
+    sort?: "latest" | "popular" | "views";
+  };
 
   let filtered = [...mediaDatabase];
 
@@ -140,6 +147,19 @@ export const getMedia: RequestHandler = (req, res) => {
         m.tags.some((tag) => tag.toLowerCase().includes(searchLower))
     );
   }
+
+  const sortKey = typeof sort === "string" ? sort.toLowerCase() : "latest";
+  filtered.sort((a, b) => {
+    if (sortKey === "popular") {
+      return (b.downloads || 0) - (a.downloads || 0);
+    }
+    if (sortKey === "views") {
+      return (b.views || 0) - (a.views || 0);
+    }
+    const dateA = new Date(a.uploadedDate || 0).getTime();
+    const dateB = new Date(b.uploadedDate || 0).getTime();
+    return dateB - dateA;
+  });
 
   const pageNum = parseInt(page as string) || 1;
   const pageSizeNum = parseInt(pageSize as string) || 20;
@@ -258,4 +278,25 @@ export const getTrendingMedia: RequestHandler = (req, res) => {
     .slice(0, 10);
 
   res.json(trending);
+};
+
+export const getCategorySummary: RequestHandler = (_req, res) => {
+  const summary = CATEGORY_KEYS.map((category) => {
+    const items = mediaDatabase.filter((item) => item.category === category);
+    const latest =
+      items.length > 0
+        ? [...items].sort(
+            (a, b) => new Date(b.uploadedDate || 0).getTime() - new Date(a.uploadedDate || 0).getTime()
+          )[0]
+        : undefined;
+    return {
+      category,
+      count: items.length,
+      latestTitle: latest?.title || null,
+      previewUrl: latest?.previewUrl || null,
+      sampleId: latest?.id || null,
+    };
+  });
+
+  res.json(summary);
 };

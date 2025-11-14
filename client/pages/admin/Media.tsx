@@ -64,6 +64,14 @@ export default function AdminMedia() {
     item.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const getCategoryIcon = (category: string) => {
+    const lower = category.toLowerCase();
+    if (lower === "video") return Video;
+    if (lower === "image") return ImageIcon;
+    if (lower === "audio") return Music;
+    return FileText;
+  };
+
   const getFileIcon = (file: File | Media) => {
     // Check if it's a Media object with category
     if ('category' in file) {
@@ -675,15 +683,20 @@ export default function AdminMedia() {
                     <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                       <td className="px-4 sm:px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center flex-shrink-0">
-                            {item.category === "Video" ? (
-                              <Video className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                            ) : item.category === "Image" ? (
-                              <ImageIcon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-                            ) : item.category === "Audio" ? (
-                              <Music className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                            {item.previewUrl ? (
+                              <img
+                                src={item.previewUrl}
+                                alt={item.title}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                onError={(e) => ((e.currentTarget.style.display = "none"))}
+                              />
                             ) : (
-                              <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                              (() => {
+                                const Icon = getCategoryIcon(item.category);
+                                return <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-muted-foreground" />;
+                              })()
                             )}
                           </div>
                           <div className="min-w-0">
