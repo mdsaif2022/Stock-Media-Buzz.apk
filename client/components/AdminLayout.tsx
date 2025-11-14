@@ -11,18 +11,27 @@ interface AdminLayoutProps {
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [hasAdminSession, setHasAdminSession] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
 
   useEffect(() => {
+    const adminSession = sessionStorage.getItem("adminSession") === "true";
+    setHasAdminSession(adminSession);
+
+    if (adminSession) {
+      return;
+    }
+
     if (currentUser && currentUser.email === (import.meta.env.VITE_ADMIN_EMAIL || "mediabuzz@local")) {
       return;
     }
-    // allow users with role admin (decoded token) or admin email
+
     if ((currentUser as any)?.role === "admin") {
       return;
     }
+
     navigate("/login?role=admin");
   }, [currentUser, navigate]);
 
@@ -127,6 +136,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <button
             onClick={() => {
               logout().catch(() => {});
+              sessionStorage.removeItem("adminSession");
               navigate("/login");
             }}
             className="w-full flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
