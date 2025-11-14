@@ -1,57 +1,3 @@
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import Layout from "@/components/Layout";
-import { Mail, Lock, ArrowRight, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { ADMIN_BASE_PATH } from "@/constants/routes";
-
-export default function Login() {
-  const [searchParams] = useSearchParams();
-  const isAdminMode = searchParams.get("role") === "admin";
-  const [accountType, setAccountType] = useState<"user" | "creator" | "admin">(isAdminMode ? "admin" : "user");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const { login, loginWithGoogle, resetPassword, refreshCreatorProfile } = useAuth();
-  const navigate = useNavigate();
-  const showVerifyBanner = searchParams.get("verifyEmail") === "1";
-  const isCreatorAccount = accountType === "creator";
-
-  useEffect(() => {
-    setAccountType(isAdminMode ? "admin" : "user");
-  }, [isAdminMode]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
-
-    try {
-      await login(email, password);
-      if (accountType === "admin") {
-        navigate(ADMIN_BASE_PATH);
-        return;
-      }
-      if (isCreatorAccount) {
-        await refreshCreatorProfile(email);
-        navigate("/creator");
-      } else {
-        navigate("/dashboard");
-      }
-    } catch (err: any) {
-      if (err?.code === "auth/user-not-found" || err?.code === "auth/wrong-password" || err?.code === "auth/invalid-credential") {
-        setError("Incorrect email or password. Please try again.");
-      } else if (err?.code === "auth/too-many-requests") {
-        setError("Too many failed attempts. Please wait a moment or reset your password.");
-      } else {
-        setError(err.message || "Failed to sign in. Please check your credentials.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleGoogleLogin = async () => {
     setError("");
@@ -158,10 +104,10 @@ export default function Login() {
                     <div className="relative">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                       <input
-                        type="email"
+                        type={isAdminMode ? "text" : "email"}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
+                        placeholder={isAdminMode ? "Enter admin username or email" : "you@example.com"}
                         required
                         className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary"
                       />

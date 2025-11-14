@@ -55,7 +55,7 @@ export const signup: RequestHandler = (req, res) => {
 
 // Login handler
 export const login: RequestHandler = (req, res) => {
-  const { email, password }: LoginRequest = req.body;
+  const { email, password, mode }: LoginRequest & { mode?: "admin" | "user" } = req.body;
 
   if (!email || !password) {
     res.status(400).json({ error: "Missing required fields" });
@@ -67,7 +67,11 @@ export const login: RequestHandler = (req, res) => {
   const adminUsername = process.env.ADMIN_USERNAME || "mediabuzz";
   const adminPassword = process.env.ADMIN_PASSWORD || "buzz@2025>";
 
-  if ((email.toLowerCase() === adminEmail.toLowerCase() || email.toLowerCase() === adminUsername.toLowerCase()) && password === adminPassword) {
+  if (
+    mode === "admin" &&
+    (email.toLowerCase() === adminEmail.toLowerCase() || email.toLowerCase() === adminUsername.toLowerCase()) &&
+    password === adminPassword
+  ) {
     const adminUser: AuthUser = {
       id: "admin",
       email: adminEmail,
