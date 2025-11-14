@@ -47,28 +47,28 @@ export default function Footer() {
             <h3 className="text-sm font-semibold text-white">Product</h3>
             <ul className="space-y-2">
               <li>
-                <Link to="/browse" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Browse Media
+                <Link to="/creator" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                  Creator Portal
                 </Link>
               </li>
               <li>
-                <Link to="/categories" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Categories
+                <Link to="/dashboard" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                  Dashboard
                 </Link>
               </li>
               <li>
-                <Link to="/search?type=video" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Videos
+                <Link to="/profile" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                  Profile
                 </Link>
               </li>
               <li>
-                <Link to="/search?type=image" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Images
+                <Link to="/login" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                  Login
                 </Link>
               </li>
               <li>
-                <Link to="/search?type=audio" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Audio
+                <Link to="/signup" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                  Sign Up
                 </Link>
               </li>
             </ul>
@@ -89,14 +89,9 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <Link to="/terms" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Terms of Service
-                </Link>
-              </li>
-              <li>
-                <Link to="/privacy" className="text-sm text-slate-400 hover:text-primary transition-colors">
-                  Privacy Policy
-                </Link>
+                <a href="#careers" className="text-sm text-slate-400 hover:text-primary transition-colors">
+                  Careers
+                </a>
               </li>
             </ul>
           </div>

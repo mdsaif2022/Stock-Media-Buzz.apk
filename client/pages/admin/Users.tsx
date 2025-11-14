@@ -1,72 +1,137 @@
 import AdminLayout from "@/components/AdminLayout";
-import { Search, Ban, Shield, RotateCcw, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Search, Ban, Shield, RotateCcw, Trash2, CheckCircle2, AlertTriangle, Loader2, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CreatorProfile, CreatorStoragePurchase, PlatformUser } from "@shared/api";
 
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  downloads: number;
-  accountStatus: "active" | "banned";
-  role: "user" | "admin";
-  joinedDate: string;
+interface ManualPaymentRecord {
+  creatorId: string;
+  creatorName: string;
+  creatorEmail: string;
+  purchase: CreatorStoragePurchase;
 }
-
-const users: User[] = [
-  {
-    id: 1,
-    name: "John Doe",
-    email: "john@example.com",
-    downloads: 245,
-    accountStatus: "active",
-    role: "user",
-    joinedDate: "2024-01-15",
-  },
-  {
-    id: 2,
-    name: "Jane Smith",
-    email: "jane@example.com",
-    downloads: 189,
-    accountStatus: "active",
-    role: "user",
-    joinedDate: "2024-02-20",
-  },
-  {
-    id: 3,
-    name: "Mike Johnson",
-    email: "mike@example.com",
-    downloads: 156,
-    accountStatus: "active",
-    role: "user",
-    joinedDate: "2024-03-10",
-  },
-  {
-    id: 4,
-    name: "Sarah Williams",
-    email: "sarah@example.com",
-    downloads: 142,
-    accountStatus: "banned",
-    role: "user",
-    joinedDate: "2024-01-25",
-  },
-  {
-    id: 5,
-    name: "Tom Brown",
-    email: "tom@example.com",
-    downloads: 128,
-    accountStatus: "active",
-    role: "user",
-    joinedDate: "2024-04-05",
-  },
-];
 
 export default function AdminUsers() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [users, setUsers] = useState<PlatformUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState("");
+  const [creators, setCreators] = useState<CreatorProfile[]>([]);
+  const [creatorLoading, setCreatorLoading] = useState(false);
+  const [manualPayments, setManualPayments] = useState<ManualPaymentRecord[]>([]);
+  const [manualLoading, setManualLoading] = useState(false);
+  const [manualError, setManualError] = useState("");
 
   const filtered = users.filter((user) =>
     user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     user.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const fetchUsers = async () => {
+    try {
+      setUsersLoading(true);
+      setUsersError("");
+      const response = await fetch("/api/admin/users");
+      if (!response.ok) {
+        throw new Error("Failed to load users");
+      }
+      const data = await response.json();
+      setUsers(data.data || []);
+    } catch (error: any) {
+      console.error(error);
+      setUsersError(error.message || "Unable to load users");
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  const fetchCreators = async () => {
+    try {
+      setCreatorLoading(true);
+      const response = await fetch("/api/admin/creators");
+      if (!response.ok) {
+        throw new Error("Failed to load creator applications");
+      }
+      const data = await response.json();
+      setCreators(data.data || []);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setCreatorLoading(false);
+    }
+  };
+
+  const fetchManualPayments = async () => {
+    try {
+      setManualLoading(true);
+      setManualError("");
+      const response = await fetch("/api/admin/storage/manual-payments");
+      if (!response.ok) {
+        throw new Error("Failed to load manual payments");
+      }
+      const data = await response.json();
+      setManualPayments(data || []);
+    } catch (error: any) {
+      console.error(error);
+      setManualError(error.message || "Unable to load manual payments");
+    } finally {
+      setManualLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+    fetchCreators();
+    fetchManualPayments();
+  }, []);
+
+  const updateCreatorStatus = async (id: string, status: CreatorProfile["status"]) => {
+    try {
+      const response = await fetch(`/api/admin/creators/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to update creator status");
+      }
+      await fetchCreators();
+    } catch (error) {
+      console.error(error);
+      alert("Unable to update creator status. Please try again.");
+    }
+  };
+
+  const handleManualPaymentAction = async (
+    record: ManualPaymentRecord,
+    action: "approve" | "reject"
+  ) => {
+    const note =
+      action === "reject" ? window.prompt("Optional note for the creator:", "") ?? "" : "";
+
+    try {
+      const response = await fetch(
+        `/api/admin/storage/manual-payments/${record.creatorId}/${record.purchase.id}/${action}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ adminNote: note }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`Failed to ${action} payment`);
+      }
+      await fetchManualPayments();
+      await fetchCreators();
+      alert(`Payment ${action === "approve" ? "approved" : "rejected"} successfully.`);
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || `Unable to ${action} payment. Please try again.`);
+    }
+  };
 
   return (
     <AdminLayout>
@@ -91,6 +156,11 @@ export default function AdminUsers() {
 
         {/* Users Table */}
         <div className="bg-white dark:bg-slate-900 rounded-lg border border-border overflow-hidden">
+          {usersError && (
+            <div className="px-6 py-3 text-sm text-destructive border-b border-border bg-destructive/5">
+              {usersError}
+            </div>
+          )}
           <table className="w-full">
             <thead className="border-b border-border bg-slate-50 dark:bg-slate-800">
               <tr>
@@ -104,74 +174,90 @@ export default function AdminUsers() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {filtered.map((user) => (
-                <tr
-                  key={user.id}
-                  className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                >
-                  <td className="px-6 py-4 text-sm font-medium">{user.name}</td>
-                  <td className="px-6 py-4 text-sm">{user.email}</td>
-                  <td className="px-6 py-4 text-sm font-semibold">{user.downloads}</td>
-                  <td className="px-6 py-4 text-sm">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        user.role === "admin"
-                          ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
-                          : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-                      }`}
-                    >
-                      {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    {user.accountStatus === "active" ? (
-                      <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded text-xs font-semibold">
-                        Active
-                      </span>
-                    ) : (
-                      <span className="px-2 py-1 bg-destructive/10 text-destructive rounded text-xs font-semibold">
-                        Banned
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-muted-foreground">
-                    {user.joinedDate}
-                  </td>
-                  <td className="px-6 py-4 text-sm">
-                    <div className="flex gap-2">
-                      {user.role !== "admin" && (
-                        <button
-                          title="Promote to Admin"
-                          className="p-1 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-colors text-purple-600 dark:text-purple-400"
-                        >
-                          <Shield className="w-4 h-4" />
-                        </button>
-                      )}
-                      {user.accountStatus === "active" ? (
-                        <button
-                          title="Ban User"
-                          className="p-1 hover:bg-destructive/10 rounded transition-colors text-destructive"
-                        >
-                          <Ban className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button
-                          title="Unban User"
-                          className="p-1 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors text-green-600 dark:text-green-400"
-                        >
-                          <RotateCcw className="w-4 h-4" />
-                        </button>
-                      )}
-                      <button
-                        title="Delete User"
-                        className="p-1 hover:bg-destructive/10 rounded transition-colors text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+              {usersLoading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-6 text-center text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin inline-block mr-2" />
+                    Loading users...
                   </td>
                 </tr>
-              ))}
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-6 text-center text-sm text-muted-foreground">
+                    No users match your search.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <td className="px-6 py-4 text-sm font-medium">{user.name}</td>
+                    <td className="px-6 py-4 text-sm break-all">{user.email}</td>
+                    <td className="px-6 py-4 text-sm font-semibold">{user.downloads ?? 0}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <span
+                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          user.role === "admin"
+                            ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+                            : "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                        }`}
+                      >
+                        {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      {user.status === "active" ? (
+                        <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded text-xs font-semibold">
+                          Active
+                        </span>
+                      ) : user.status === "banned" ? (
+                        <span className="px-2 py-1 bg-destructive/10 text-destructive rounded text-xs font-semibold">
+                          Banned
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs font-semibold">
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-muted-foreground">
+                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "—"}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="flex gap-2">
+                        {user.role !== "admin" && (
+                          <button
+                            title="Promote to Admin"
+                            className="p-1 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded transition-colors text-purple-600 dark:text-purple-400"
+                          >
+                            <Shield className="w-4 h-4" />
+                          </button>
+                        )}
+                        {user.status === "active" ? (
+                          <button
+                            title="Ban User"
+                            className="p-1 hover:bg-destructive/10 rounded transition-colors text-destructive"
+                          >
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            title="Unban User"
+                            className="p-1 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors text-green-600 dark:text-green-400"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          title="Delete User"
+                          className="p-1 hover:bg-destructive/10 rounded transition-colors text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -180,19 +266,186 @@ export default function AdminUsers() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
             <p className="text-muted-foreground text-sm mb-2">Total Users</p>
-            <p className="text-3xl font-bold">5,234</p>
-            <p className="text-xs text-green-600 mt-2">+124 this month</p>
+            <p className="text-3xl font-bold">{users.length}</p>
+            <p className="text-xs text-muted-foreground mt-2">Includes downloader and creator accounts</p>
           </div>
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
             <p className="text-muted-foreground text-sm mb-2">Active Users</p>
-            <p className="text-3xl font-bold">5,142</p>
-            <p className="text-xs text-muted-foreground mt-2">98.4% active rate</p>
+            <p className="text-3xl font-bold">{users.filter((u) => u.status === "active").length}</p>
+            <p className="text-xs text-muted-foreground mt-2">
+              {users.length ? `${Math.round((users.filter((u) => u.status === "active").length / users.length) * 100)}% active` : "—"}
+            </p>
           </div>
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
             <p className="text-muted-foreground text-sm mb-2">Banned Users</p>
-            <p className="text-3xl font-bold">92</p>
-            <p className="text-xs text-muted-foreground mt-2">1.6% of total</p>
+            <p className="text-3xl font-bold">{users.filter((u) => u.status === "banned").length}</p>
+            <p className="text-xs text-muted-foreground mt-2">Users blocked from downloads</p>
           </div>
+        </div>
+
+        {/* Creator Verification */}
+        <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Sparkles className="w-4 h-4 text-primary" />
+                Creator Verification
+              </div>
+              <p className="text-lg font-semibold">Review & verify creator accounts</p>
+            </div>
+            <button
+              onClick={fetchCreators}
+              className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Refresh
+            </button>
+          </div>
+
+          {creatorLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading creator verification queue...
+            </div>
+          ) : creators.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No creator profiles need verification right now.</p>
+          ) : (
+            <div className="space-y-3">
+              {creators.map((creator) => (
+                <div
+                  key={creator.id}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-border p-3"
+                >
+                  <div>
+                    <p className="font-semibold">{creator.name}</p>
+                    <p className="text-sm text-muted-foreground break-all">{creator.email}</p>
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {creator.specialization || "No specialization provided"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-1 text-xs rounded-full font-semibold ${
+                        creator.status === "approved"
+                          ? "bg-green-100 text-green-700"
+                          : creator.status === "pending"
+                          ? "bg-amber-100 text-amber-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {creator.status}
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateCreatorStatus(creator.id, "approved")}
+                        className="px-2 py-1 text-xs rounded-lg border border-green-500 text-green-600 hover:bg-green-500/10 transition-colors flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        Verify
+                      </button>
+                      <button
+                        onClick={() => updateCreatorStatus(creator.id, "rejected")}
+                        className="px-2 py-1 text-xs rounded-lg border border-destructive text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1"
+                      >
+                        <AlertTriangle className="w-3 h-3" />
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Manual Storage Payments */}
+        <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 space-y-4">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Sparkles className="w-4 h-4 text-primary" />
+                Storage Payments
+              </div>
+              <p className="text-lg font-semibold">Verify manual bKash payments</p>
+            </div>
+            <button
+              onClick={fetchManualPayments}
+              className="px-3 py-1.5 text-sm border border-border rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Refresh
+            </button>
+          </div>
+
+          {manualError && <p className="text-sm text-destructive">{manualError}</p>}
+          {manualLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading manual payments...
+            </div>
+          ) : manualPayments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No manual payments submitted yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {manualPayments.map((record) => (
+                <div
+                  key={`${record.creatorId}-${record.purchase.id}`}
+                  className="rounded-lg border border-border p-3 flex flex-col gap-2"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold">{record.creatorName}</p>
+                      <p className="text-xs text-muted-foreground">{record.creatorEmail}</p>
+                    </div>
+                    <span
+                      className={`px-2 py-1 text-xs rounded-full font-semibold ${
+                        record.purchase.status === "completed"
+                          ? "bg-green-100 text-green-700"
+                          : record.purchase.status === "rejected"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-amber-100 text-amber-700"
+                      }`}
+                    >
+                      {record.purchase.status}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs text-muted-foreground">
+                    <p>
+                      Plan: {record.purchase.gb}GB / {record.purchase.months}m
+                    </p>
+                    <p>Amount: ৳{record.purchase.totalTk}</p>
+                    <p>Txn: {record.purchase.reference}</p>
+                    <p>Sender: {record.purchase.senderNumber}</p>
+                    <p>Method: {record.purchase.paymentMethod}</p>
+                    <p>Submitted: {new Date(record.purchase.purchasedAt).toLocaleString()}</p>
+                  </div>
+                  {record.purchase.adminNote && (
+                    <p className="text-xs text-muted-foreground">
+                      Admin note: {record.purchase.adminNote}
+                    </p>
+                  )}
+                  {record.purchase.status === "pending" && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleManualPaymentAction(record, "approve")}
+                        className="px-3 py-1 text-xs rounded-lg border border-green-500 text-green-600 hover:bg-green-500/10 transition-colors flex items-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3 h-3" />
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleManualPaymentAction(record, "reject")}
+                        className="px-3 py-1 text-xs rounded-lg border border-destructive text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1"
+                      >
+                        <AlertTriangle className="w-3 h-3" />
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </AdminLayout>

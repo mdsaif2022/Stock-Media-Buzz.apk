@@ -48,66 +48,66 @@ const topUsers = [
 export default function AdminDashboard() {
   return (
     <AdminLayout>
-      <div className="space-y-8">
+      <div className="space-y-4 sm:space-y-6 lg:space-y-8">
         {/* Page Header */}
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground mt-2">Welcome back! Here's your platform overview.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Dashboard</h1>
+          <p className="text-sm sm:text-base text-muted-foreground mt-1 sm:mt-2">Welcome back! Here's your platform overview.</p>
         </div>
 
         {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="text-muted-foreground text-sm">Total Users</p>
-                <p className="text-3xl font-bold mt-2">5,234</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-start mb-3 sm:mb-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-muted-foreground text-xs sm:text-sm truncate">Total Users</p>
+                <p className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">5,234</p>
               </div>
-              <Users className="w-8 h-8 text-primary" />
+              <Users className="w-6 h-6 sm:w-8 sm:h-8 text-primary flex-shrink-0 ml-2" />
             </div>
             <p className="text-xs text-green-600">+12% from last month</p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="text-muted-foreground text-sm">Total Media</p>
-                <p className="text-3xl font-bold mt-2">2,456</p>
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-start mb-3 sm:mb-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-muted-foreground text-xs sm:text-sm truncate">Total Media</p>
+                <p className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">2,456</p>
               </div>
-              <FileText className="w-8 h-8 text-secondary" />
+              <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-secondary flex-shrink-0 ml-2" />
             </div>
             <p className="text-xs text-green-600">+28 this week</p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="text-muted-foreground text-sm">Total Downloads</p>
-                <p className="text-3xl font-bold mt-2">168.2K</p>
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-start mb-3 sm:mb-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-muted-foreground text-xs sm:text-sm truncate">Total Downloads</p>
+                <p className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">168.2K</p>
               </div>
-              <Download className="w-8 h-8 text-accent" />
+              <Download className="w-6 h-6 sm:w-8 sm:h-8 text-accent flex-shrink-0 ml-2" />
             </div>
             <p className="text-xs text-green-600">+5.2K this week</p>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <p className="text-muted-foreground text-sm">Active Users (7d)</p>
-                <p className="text-3xl font-bold mt-2">892</p>
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-start mb-3 sm:mb-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-muted-foreground text-xs sm:text-sm truncate">Active Users (7d)</p>
+                <p className="text-2xl sm:text-3xl font-bold mt-1 sm:mt-2">892</p>
               </div>
-              <Activity className="w-8 h-8 text-primary" />
+              <Activity className="w-6 h-6 sm:w-8 sm:h-8 text-primary flex-shrink-0 ml-2" />
             </div>
             <p className="text-xs text-green-600">+3.4% this week</p>
           </div>
         </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Download Trend */}
-          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
-            <h3 className="text-lg font-bold mb-4">Download Trends (Last 7 days)</h3>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 shadow-sm">
+            <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4">Download Trends (Last 7 days)</h3>
+            <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
               <LineChart data={downloadData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="date" stroke="var(--muted-foreground)" />
@@ -119,9 +119,9 @@ export default function AdminDashboard() {
           </div>
 
           {/* Media Type Distribution */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
-            <h3 className="text-lg font-bold mb-4">Media Distribution</h3>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 shadow-sm">
+            <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4">Media Distribution</h3>
+            <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
               <PieChart>
                 <Pie
                   data={mediaTypeData}
@@ -144,34 +144,34 @@ export default function AdminDashboard() {
         </div>
 
         {/* Top Downloads and Users */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Top Downloads */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
-            <h3 className="text-lg font-bold mb-4">Top 10 Downloaded Media</h3>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 shadow-sm">
+            <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4">Top 10 Downloaded Media</h3>
+            <div className="space-y-2 sm:space-y-3 max-h-80 sm:max-h-96 overflow-y-auto -mx-2 sm:mx-0 px-2 sm:px-0">
               {topDownloads.map((item, index) => (
-                <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm">{index + 1}. {item.title}</p>
-                    <p className="text-xs text-muted-foreground">{item.type}</p>
+                <div key={item.id} className="flex items-center justify-between p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-800 rounded-lg gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-xs sm:text-sm truncate">{index + 1}. {item.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{item.type}</p>
                   </div>
-                  <p className="font-semibold text-primary">{item.downloads.toLocaleString()}</p>
+                  <p className="font-semibold text-primary text-xs sm:text-sm flex-shrink-0">{item.downloads.toLocaleString()}</p>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Top Active Users */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
-            <h3 className="text-lg font-bold mb-4">Top 10 Active Users</h3>
-            <div className="space-y-3 max-h-96 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 shadow-sm">
+            <h3 className="text-base sm:text-lg font-bold mb-3 sm:mb-4">Top 10 Active Users</h3>
+            <div className="space-y-2 sm:space-y-3 max-h-80 sm:max-h-96 overflow-y-auto -mx-2 sm:mx-0 px-2 sm:px-0">
               {topUsers.map((user, index) => (
-                <div key={user.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm">{index + 1}. {user.name}</p>
-                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                <div key={user.id} className="flex items-center justify-between p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-800 rounded-lg gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-xs sm:text-sm truncate">{index + 1}. {user.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                   </div>
-                  <p className="font-semibold text-accent">{user.downloads}</p>
+                  <p className="font-semibold text-accent text-xs sm:text-sm flex-shrink-0">{user.downloads}</p>
                 </div>
               ))}
             </div>
@@ -179,21 +179,20 @@ export default function AdminDashboard() {
         </div>
 
         {/* Cloud Storage Status */}
-        <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <AlertCircle className="w-5 h-5 text-primary" />
-            <h3 className="text-lg font-bold">Cloud Storage Status</h3>
+        <div className="bg-white dark:bg-slate-900 rounded-lg border border-border p-4 sm:p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-4 sm:mb-6">
+            <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-primary flex-shrink-0" />
+            <h3 className="text-base sm:text-lg font-bold">Cloud Storage Status</h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              { name: "Cloudinary 1", used: 75, total: 100 },
-              { name: "Cloudinary 2", used: 45, total: 100 },
-              { name: "Cloudinary 3", used: 92, total: 100 },
-              { name: "Cloudinary 4", used: 28, total: 100 },
-            ].map((cloud) => (
-              <div key={cloud.name}>
-                <p className="font-medium text-sm mb-2">{cloud.name}</p>
-                <div className="w-full h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {[
+                { name: "Server 1 (dk81tgmae)", used: 75, total: 100 },
+                { name: "Server 2 (dxijk3ivo)", used: 45, total: 100 },
+                { name: "Server 3 (dvdtbffva)", used: 92, total: 100 },
+              ].map((cloud) => (
+              <div key={cloud.name} className="min-w-0">
+                <p className="font-medium text-xs sm:text-sm mb-2 truncate">{cloud.name}</p>
+                <div className="w-full h-2.5 sm:h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all ${
                       cloud.used > 80
@@ -205,7 +204,7 @@ export default function AdminDashboard() {
                     style={{ width: `${cloud.used}%` }}
                   ></div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1.5">
                   {cloud.used}GB / {cloud.total}GB
                 </p>
               </div>

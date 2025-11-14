@@ -6,6 +6,10 @@ import * as mediaRoutes from "./routes/media";
 import * as authRoutes from "./routes/auth";
 import * as downloadRoutes from "./routes/downloads";
 import * as adminRoutes from "./routes/admin";
+import * as creatorRoutes from "./routes/creators.js";
+import * as settingsRoutes from "./routes/settings.js";
+import * as usersRoutes from "./routes/users.js";
+import { handleFileUpload, handleUrlUpload, upload } from "./routes/upload.js";
 
 export function createServer() {
   const app = express();
@@ -44,6 +48,9 @@ export function createServer() {
   app.post("/api/auth/logout", authRoutes.logout);
   app.post("/api/auth/reset-password", authRoutes.resetPasswordRequest);
 
+  // User profile sync routes
+  app.post("/api/users/register", usersRoutes.registerUser);
+
   // Media routes
   app.get("/api/media", mediaRoutes.getMedia);
   app.get("/api/media/trending", mediaRoutes.getTrendingMedia);
@@ -53,6 +60,7 @@ export function createServer() {
   app.delete("/api/media/:id", mediaRoutes.deleteMedia); // Admin only
 
   // Download routes
+  app.get("/api/download/proxy/:mediaId", downloadRoutes.proxyDownload);
   app.post("/api/download/:mediaId", downloadRoutes.initiateDownload);
   app.get("/api/download/history", downloadRoutes.getDownloadHistory);
   app.get("/api/admin/download-stats", downloadRoutes.getDownloadStats); // Admin only
@@ -61,9 +69,31 @@ export function createServer() {
   app.get("/api/admin/stats", adminRoutes.getDashboardStats);
   app.get("/api/admin/cloudinary-status", adminRoutes.getCloudinaryStatus);
   app.get("/api/admin/analytics", adminRoutes.getAnalyticsData);
-  app.get("/api/admin/users", adminRoutes.getUsersData);
+  app.get("/api/admin/users", usersRoutes.getUsersAdmin);
   app.post("/api/admin/users/:userId/ban", adminRoutes.toggleUserBan);
   app.post("/api/admin/users/:userId/promote", adminRoutes.promoteUserToAdmin);
+
+  // Creator routes
+  app.post("/api/creators", creatorRoutes.createOrUpdateCreator);
+  app.get("/api/creators/status", creatorRoutes.getCreatorStatus);
+  app.post("/api/creators/storage/purchase", creatorRoutes.purchaseCreatorStorage);
+  app.post("/api/creators/storage/purchase/manual", creatorRoutes.purchaseCreatorStorageManual);
+  app.get("/api/admin/storage/manual-payments", creatorRoutes.getManualStoragePayments);
+  app.post("/api/admin/storage/manual-payments/:creatorId/:purchaseId/approve", creatorRoutes.approveManualStoragePayment);
+  app.post("/api/admin/storage/manual-payments/:creatorId/:purchaseId/reject", creatorRoutes.rejectManualStoragePayment);
+
+  app.get("/api/settings/payment", settingsRoutes.getPaymentSettings);
+  app.put("/api/settings/payment", settingsRoutes.updatePaymentSettings);
+  app.get("/api/settings/branding", settingsRoutes.getBrandingSettings);
+  app.put("/api/settings/branding", settingsRoutes.updateBrandingSettings);
+  app.get("/api/settings/general", settingsRoutes.getGeneralSettings);
+  app.put("/api/settings/general", settingsRoutes.updateGeneralSettings);
+  app.get("/api/admin/creators", creatorRoutes.getCreatorsAdmin);
+  app.patch("/api/admin/creators/:id", creatorRoutes.updateCreatorStatus);
+
+  // Upload routes
+  app.post("/api/upload/file", upload.array("files", 10), handleFileUpload);
+  app.post("/api/upload/url", handleUrlUpload);
 
   return app;
 }

@@ -4,19 +4,41 @@ import App from "./App";
 
 // Load Adsterra script (replace with actual Adsterra ID)
 const loadAdsterraScript = () => {
-  const script = document.createElement("script");
-  script.src = "//adsterra.com/scripts/display.js";
-  script.async = true;
-  script.onload = () => {
-    (window as any).adsterraScript?.init?.();
-  };
-  document.head.appendChild(script);
+  try {
+    const script = document.createElement("script");
+    script.src = "//adsterra.com/scripts/display.js";
+    script.async = true;
+    script.onload = () => {
+      (window as any).adsterraScript?.init?.();
+    };
+    script.onerror = () => {
+      console.warn("Failed to load Adsterra script");
+    };
+    document.head.appendChild(script);
+  } catch (error) {
+    console.warn("Error loading Adsterra script:", error);
+  }
 };
 
-// Load Adsterra on app start
-loadAdsterraScript();
+// Load Adsterra on app start (non-blocking)
+if (typeof window !== "undefined") {
+  loadAdsterraScript();
+}
 
 const root = document.getElementById("root");
 if (root) {
-  createRoot(root).render(<App />);
+  try {
+    createRoot(root).render(<App />);
+  } catch (error) {
+    console.error("Failed to render app:", error);
+    root.innerHTML = `
+      <div style="padding: 20px; text-align: center;">
+        <h1>Error loading application</h1>
+        <p>Please refresh the page or contact support.</p>
+        <pre>${error instanceof Error ? error.message : String(error)}</pre>
+      </div>
+    `;
+  }
+} else {
+  console.error("Root element not found");
 }

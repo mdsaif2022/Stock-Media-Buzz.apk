@@ -1,16 +1,121 @@
 import { RequestHandler } from "express";
 import { DownloadResponse } from "@shared/api";
+import { mediaDatabase } from "./media.js";
 
 // Track downloads
 const downloadLog: Array<{ mediaId: string; userId: string; timestamp: string }> = [];
 
-// Trigger download with ad display
+// Proxy download file to bypass CORS
+export const proxyDownload: RequestHandler = async (req, res) => {
+  const { mediaId } = req.params;
+  
+  if (!mediaId) {
+    res.status(400).json({ error: "Media ID is required" });
+    return;
+  }
+
+  try {
+    // Find media in database
+    const media = mediaDatabase.find((m) => m.id === mediaId);
+    
+    if (!media) {
+      res.status(404).json({ error: "Media not found" });
+      return;
+    }
+
+    // Fetch the file from Cloudinary
+    const fileResponse = await fetch(media.fileUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+      },
+    });
+
+    if (!fileResponse.ok) {
+      throw new Error(`Failed to fetch file: ${fileResponse.statusText}`);
+    }
+
+    // Get content type
+    const contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';
+    
+    // Determine filename
+    let fileExtension = 'mp4';
+    const urlParts = media.fileUrl.split('.');
+    if (urlParts.length > 1) {
+      const lastPart = urlParts[urlParts.length - 1].split('?')[0].split('#')[0];
+      if (lastPart && lastPart.length <= 5) {
+        fileExtension = lastPart.toLowerCase();
+      }
+    }
+    
+    // Try to get extension from content type or URL
+    const urlLower = media.fileUrl.toLowerCase();
+    if (urlLower.endsWith('.apk')) {
+      fileExtension = 'apk';
+    } else if (urlLower.endsWith('.xapk')) {
+      fileExtension = 'xapk';
+    } else if (contentType.includes('image/jpeg') || contentType.includes('image/jpg')) {
+      fileExtension = 'jpg';
+    } else if (contentType.includes('image/png')) {
+      fileExtension = 'png';
+    } else if (contentType.includes('image/gif')) {
+      fileExtension = 'gif';
+    } else if (contentType.includes('image/webp')) {
+      fileExtension = 'webp';
+    } else if (contentType.includes('video/mp4')) {
+      fileExtension = 'mp4';
+    } else if (contentType.includes('video/webm')) {
+      fileExtension = 'webm';
+    } else if (contentType.includes('audio/mpeg') || contentType.includes('audio/mp3')) {
+      fileExtension = 'mp3';
+    } else if (contentType.includes('audio/wav')) {
+      fileExtension = 'wav';
+    } else if (contentType.includes('audio/ogg')) {
+      fileExtension = 'ogg';
+    } else if (contentType.includes('application/vnd.android.package-archive')) {
+      fileExtension = 'apk';
+    }
+
+    const filename = `${media.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${fileExtension}`;
+
+    // Set headers for download
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', fileResponse.headers.get('content-length') || '0');
+    res.setHeader('Cache-Control', 'no-cache');
+
+    // Stream the file to the response
+    const buffer = await fileResponse.arrayBuffer();
+    res.send(Buffer.from(buffer));
+
+    // Log the download
+    const userId = (req as any).user?.id || "anonymous";
+    downloadLog.push({
+      mediaId,
+      userId,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error("Proxy download error:", error);
+    res.status(500).json({ error: "Failed to download file", message: error.message });
+  }
+};
+
+// Trigger download with ad display (legacy endpoint)
 export const initiateDownload: RequestHandler = (req, res) => {
   const { mediaId } = req.params;
-  const userId = req.user?.id || "anonymous";
+  const userId = (req as any).user?.id || "anonymous";
 
   if (!mediaId) {
     res.status(400).json({ error: "Media ID is required" });
+    return;
+  }
+
+  // Find media to get the file URL
+  const media = mediaDatabase.find((m) => m.id === mediaId);
+
+  if (!media) {
+    res.status(404).json({ error: "Media not found" });
     return;
   }
 
@@ -21,12 +126,12 @@ export const initiateDownload: RequestHandler = (req, res) => {
     timestamp: new Date().toISOString(),
   });
 
-  // Generate signed download URL (in production, use Cloudinary signed URLs)
+  // Return proxy download URL
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24);
 
   const response: DownloadResponse = {
-    downloadUrl: `https://cloudinary.example.com/download/${mediaId}`,
+    downloadUrl: `/api/download/proxy/${mediaId}`,
     expiresAt: expiresAt.toISOString(),
   };
 

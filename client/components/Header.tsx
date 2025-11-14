@@ -1,15 +1,29 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Menu, X, LogOut, LogIn, User } from "lucide-react";
+import AdsSlider from "./AdsSlider";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const { currentUser, logout, creatorProfile } = useAuth();
+  const navigate = useNavigate();
   
-  // Mock user state - will be replaced with Firebase auth
-  const isLoggedIn = false;
+  const isLoggedIn = !!currentUser;
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/");
+      setIsUserMenuOpen(false);
+    } catch (error) {
+      console.error("Failed to logout:", error);
+    }
+  };
 
   return (
+    <>
     <header className="sticky top-0 z-50 w-full bg-white dark:bg-slate-950 border-b border-border shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
@@ -25,24 +39,21 @@ export default function Header() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
-            <Link 
-              to="/browse" 
-              className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-            >
+            <Link to="/browse" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
               Browse Media
             </Link>
-            <Link 
-              to="/categories" 
-              className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-            >
+            <Link to="/categories" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
               Categories
             </Link>
-            <a 
-              href="#pricing" 
-              className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+            <Link to="/contact" className="text-sm font-medium text-foreground hover:text-primary transition-colors">
+              Contact
+            </Link>
+            <Link
+              to="/creator"
+              className="text-sm font-medium text-foreground hover:text-primary transition-colors flex items-center gap-2"
             >
-              How It Works
-            </a>
+              Creator Portal
+            </Link>
           </nav>
 
           {/* Right Section */}
@@ -64,28 +75,45 @@ export default function Header() {
                 </Link>
               </div>
             ) : (
-              <div className="hidden sm:relative">
+              <div className="relative hidden sm:block">
                 <button
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium"
                 >
                   <User className="w-4 h-4" />
+                  <span className="text-sm truncate max-w-[120px]">
+                    {currentUser?.displayName || currentUser?.email || "Account"}
+                  </span>
                 </button>
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-border rounded-lg shadow-lg">
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-border rounded-lg shadow-lg z-50">
                     <Link
                       to="/dashboard"
+                      onClick={() => setIsUserMenuOpen(false)}
                       className="block px-4 py-2 text-sm hover:bg-secondary/10 transition-colors"
                     >
                       Dashboard
                     </Link>
                     <Link
-                      to="/admin"
+                      to="/profile"
+                      onClick={() => setIsUserMenuOpen(false)}
                       className="block px-4 py-2 text-sm hover:bg-secondary/10 transition-colors"
                     >
-                      Admin Panel
+                      Profile
                     </Link>
+                    {creatorProfile && (
+                      <Link
+                        to="/creator"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="block px-4 py-2 text-sm hover:bg-secondary/10 transition-colors"
+                      >
+                        Creator Portal
+                      </Link>
+                    )}
+                    {/* Admin Panel link intentionally removed for regular users */}
+                    <div className="border-t border-border my-1"></div>
                     <button
+                      onClick={handleLogout}
                       className="w-full flex items-center gap-2 px-4 py-2 text-sm text-destructive hover:bg-destructive/5 transition-colors text-left"
                     >
                       <LogOut className="w-4 h-4" />
@@ -112,25 +140,28 @@ export default function Header() {
 
         {/* Mobile Navigation */}
         {isMenuOpen && (
-          <nav className="md:hidden pb-4 border-t border-border">
+          <nav className="md:hidden pb-4 border-t border-border space-y-1">
             <Link
               to="/browse"
+              onClick={() => setIsMenuOpen(false)}
               className="block px-4 py-2 text-sm font-medium hover:bg-secondary/10 transition-colors"
             >
               Browse Media
             </Link>
             <Link
               to="/categories"
+              onClick={() => setIsMenuOpen(false)}
               className="block px-4 py-2 text-sm font-medium hover:bg-secondary/10 transition-colors"
             >
               Categories
             </Link>
-            <a
-              href="#pricing"
+            <Link
+              to="/contact"
+              onClick={() => setIsMenuOpen(false)}
               className="block px-4 py-2 text-sm font-medium hover:bg-secondary/10 transition-colors"
             >
-              How It Works
-            </a>
+              Contact
+            </Link>
             {!isLoggedIn && (
               <div className="flex gap-2 px-4 py-3 border-t border-border">
                 <Link
@@ -147,9 +178,69 @@ export default function Header() {
                 </Link>
               </div>
             )}
+            {isLoggedIn && (
+              <div className="flex flex-col gap-1 px-4 py-3 border-t border-border">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                    <User className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <span>{currentUser?.displayName || "My Account"}</span>
+                    <span className="text-xs text-muted-foreground break-all">{currentUser?.email}</span>
+                  </div>
+                </div>
+                <Link
+                  to="/dashboard"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="block px-3 py-2 text-sm font-medium hover:bg-secondary/10 rounded-md transition-colors"
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  to="/profile"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="block px-3 py-2 text-sm font-medium hover:bg-secondary/10 rounded-md transition-colors"
+                >
+                  Profile
+                </Link>
+                {creatorProfile && (
+                  <Link
+                    to="/creator"
+                    onClick={() => setIsMenuOpen(false)}
+                    className="block px-3 py-2 text-sm font-medium hover:bg-secondary/10 rounded-md transition-colors"
+                  >
+                    Creator Portal
+                  </Link>
+                )}
+                {/* Admin Panel link intentionally hidden for non-admin users */}
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="mt-2 flex items-center justify-center gap-2 px-3 py-2 text-sm font-semibold text-destructive border border-destructive rounded-md hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </button>
+              </div>
+            )}
+            {!isLoggedIn && (
+              <Link
+                to="/creator"
+                onClick={() => setIsMenuOpen(false)}
+                className="block mt-2 px-4 py-2 text-sm font-semibold text-center border border-dashed border-primary rounded-lg text-primary hover:bg-primary/5 transition-colors"
+              >
+                Become a Creator
+              </Link>
+            )}
           </nav>
         )}
       </div>
     </header>
+      
+      {/* Ads Slider Below Header */}
+      <AdsSlider />
+    </>
   );
 }
