@@ -1,6 +1,8 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, Menu, X, BarChart3, FileText, Radio, Users, Settings, Home } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { ADMIN_BASE_PATH } from "@/constants/routes";
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -10,6 +12,19 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { currentUser, logout } = useAuth();
+
+  useEffect(() => {
+    if (currentUser && currentUser.email === (import.meta.env.VITE_ADMIN_EMAIL || "mediabuzz@local")) {
+      return;
+    }
+    // allow users with role admin (decoded token) or admin email
+    if ((currentUser as any)?.role === "admin") {
+      return;
+    }
+    navigate("/login?role=admin");
+  }, [currentUser, navigate]);
 
   // Detect mobile screen size
   useEffect(() => {
@@ -30,12 +45,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const isActive = (path: string) => location.pathname === path;
 
   const navItems = [
-    { label: "Dashboard", href: "/admin", icon: Home },
-    { label: "Media", href: "/admin/media", icon: FileText },
-    { label: "Ads Manager", href: "/admin/ads", icon: Radio },
-    { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-    { label: "Users", href: "/admin/users", icon: Users },
-    { label: "Settings", href: "/admin/settings", icon: Settings },
+    { label: "Dashboard", href: ADMIN_BASE_PATH, icon: Home },
+    { label: "Media", href: `${ADMIN_BASE_PATH}/media`, icon: FileText },
+    { label: "Ads Manager", href: `${ADMIN_BASE_PATH}/ads`, icon: Radio },
+    { label: "Analytics", href: `${ADMIN_BASE_PATH}/analytics`, icon: BarChart3 },
+    { label: "Users", href: `${ADMIN_BASE_PATH}/users`, icon: Users },
+    { label: "Settings", href: `${ADMIN_BASE_PATH}/settings`, icon: Settings },
   ];
 
   const handleNavClick = () => {
@@ -109,7 +124,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         </nav>
 
         <div className="p-3 sm:p-4 border-t border-slate-800 flex-shrink-0">
-          <button className="w-full flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+          <button
+            onClick={() => {
+              logout().catch(() => {});
+              navigate("/login");
+            }}
+            className="w-full flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+          >
             <LogOut className="w-5 h-5 flex-shrink-0" />
             <span className="font-medium text-sm sm:text-base">Logout</span>
           </button>
@@ -132,7 +153,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             )}
           </button>
           <div className="text-right">
-            <p className="text-xs sm:text-sm text-muted-foreground">Logged in as Admin</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              {currentUser?.email || "Admin"}
+            </p>
           </div>
         </div>
 

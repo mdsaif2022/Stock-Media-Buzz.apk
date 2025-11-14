@@ -1,11 +1,12 @@
 import { RequestHandler } from "express";
 import { AuthResponse, LoginRequest, SignupRequest, AuthUser } from "@shared/api";
+import "dotenv/config";
 
 // Mock user database
 const userDatabase: AuthUser[] = [
   {
     id: "1",
-    email: "admin@freemediabuzz.com",
+    email: process.env.ADMIN_EMAIL || "admin@freemediabuzz.com",
     name: "Admin User",
     role: "admin",
     createdAt: "2024-01-01",
@@ -58,6 +59,27 @@ export const login: RequestHandler = (req, res) => {
 
   if (!email || !password) {
     res.status(400).json({ error: "Missing required fields" });
+    return;
+  }
+
+  // Special admin credentials bypass
+  const adminEmail = process.env.ADMIN_EMAIL || "mediabuzz@local";
+  const adminUsername = process.env.ADMIN_USERNAME || "mediabuzz";
+  const adminPassword = process.env.ADMIN_PASSWORD || "buzz@2025>";
+
+  if ((email.toLowerCase() === adminEmail.toLowerCase() || email.toLowerCase() === adminUsername.toLowerCase()) && password === adminPassword) {
+    const adminUser: AuthUser = {
+      id: "admin",
+      email: adminEmail,
+      name: "Admin User",
+      role: "admin",
+      createdAt: new Date().toISOString(),
+    };
+    const response: AuthResponse = {
+      user: adminUser,
+      token: generateMockToken(adminUser),
+    };
+    res.json(response);
     return;
   }
 

@@ -1,11 +1,14 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { Mail, Lock, ArrowRight, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { ADMIN_BASE_PATH } from "@/constants/routes";
 
 export default function Login() {
-  const [accountType, setAccountType] = useState<"user" | "creator">("user");
+  const [searchParams] = useSearchParams();
+  const isAdminMode = searchParams.get("role") === "admin";
+  const [accountType, setAccountType] = useState<"user" | "creator" | "admin">(isAdminMode ? "admin" : "user");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -13,9 +16,12 @@ export default function Login() {
   const [success, setSuccess] = useState("");
   const { login, loginWithGoogle, resetPassword, refreshCreatorProfile } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const showVerifyBanner = searchParams.get("verifyEmail") === "1";
   const isCreatorAccount = accountType === "creator";
+
+  useEffect(() => {
+    setAccountType(isAdminMode ? "admin" : "user");
+  }, [isAdminMode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +30,10 @@ export default function Login() {
 
     try {
       await login(email, password);
+      if (accountType === "admin") {
+        navigate(ADMIN_BASE_PATH);
+        return;
+      }
       if (isCreatorAccount) {
         await refreshCreatorProfile(email);
         navigate("/creator");
@@ -48,6 +58,9 @@ export default function Login() {
     setIsLoading(true);
     try {
       await loginWithGoogle();
+      if (accountType === "admin") {
+        throw new Error("Admin accounts must sign in with email/password.");
+      }
       if (isCreatorAccount) {
         await refreshCreatorProfile();
         navigate("/creator");
@@ -83,38 +96,44 @@ export default function Login() {
             </p>
 
             {/* Account Type Toggle */}
-            <div className="mb-4 sm:mb-6">
-              <p className="text-sm font-semibold mb-2">Sign in as</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAccountType("user")}
-                  className={`rounded-lg border px-3 py-2 text-left transition-all ${
-                    !isCreatorAccount ? "border-primary bg-primary/10 text-primary shadow-sm" : "border-border hover:border-primary/40"
-                  }`}
-                >
-                  <p className="font-semibold text-sm">Downloader</p>
-                  <p className="text-xs text-muted-foreground">Access your downloads</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAccountType("creator")}
-                  className={`rounded-lg border px-3 py-2 text-left transition-all ${
-                    isCreatorAccount ? "border-primary bg-primary/10 text-primary shadow-sm" : "border-border hover:border-primary/40"
-                  }`}
-                >
-                  <p className="font-semibold text-sm flex items-center gap-1">
-                    <Sparkles className="w-4 h-4" /> Creator
-                  </p>
-                  <p className="text-xs text-muted-foreground">Manage uploads & stats</p>
-                </button>
-              </div>
-              {isCreatorAccount && (
-                <div className="mt-3 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3 text-xs text-primary">
-                  We'll redirect you to the creator portal after sign in.
+            {!isAdminMode ? (
+              <div className="mb-4 sm:mb-6">
+                <p className="text-sm font-semibold mb-2">Sign in as</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAccountType("user")}
+                    className={`rounded-lg border px-3 py-2 text-left transition-all ${
+                      !isCreatorAccount ? "border-primary bg-primary/10 text-primary shadow-sm" : "border-border hover:border-primary/40"
+                    }`}
+                  >
+                    <p className="font-semibold text-sm">Downloader</p>
+                    <p className="text-xs text-muted-foreground">Access your downloads</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAccountType("creator")}
+                    className={`rounded-lg border px-3 py-2 text-left transition-all ${
+                      isCreatorAccount ? "border-primary bg-primary/10 text-primary shadow-sm" : "border-border hover:border-primary/40"
+                    }`}
+                  >
+                    <p className="font-semibold text-sm flex items-center gap-1">
+                      <Sparkles className="w-4 h-4" /> Creator
+                    </p>
+                    <p className="text-xs text-muted-foreground">Manage uploads & stats</p>
+                  </button>
                 </div>
-              )}
-            </div>
+                {isCreatorAccount && (
+                  <div className="mt-3 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3 text-xs text-primary">
+                    We'll redirect you to the creator portal after sign in.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mb-4 sm:mb-6 rounded-lg border border-dashed border-primary/30 bg-primary/5 p-3 text-xs text-primary">
+                Admin access detected. Please sign in with admin credentials.
+              </div>
+            )}
 
             {showVerifyBanner && (
               <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-500/40 text-amber-800 dark:text-amber-200 rounded-lg text-sm">

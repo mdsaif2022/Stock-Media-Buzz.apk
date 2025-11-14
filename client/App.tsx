@@ -23,6 +23,7 @@ import AdminAnalytics from "./pages/admin/Analytics";
 import AdminUsers from "./pages/admin/Users";
 import AdminSettings from "./pages/admin/Settings";
 import { useEffect } from "react";
+import { ADMIN_BASE_PATH } from "./constants/routes";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,12 +75,12 @@ export default function App() {
               <Route path="/media/:id" element={<MediaDetail />} />
 
               {/* Admin Routes */}
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/media" element={<AdminMedia />} />
-              <Route path="/admin/ads" element={<AdminAds />} />
-              <Route path="/admin/analytics" element={<AdminAnalytics />} />
-              <Route path="/admin/users" element={<AdminUsers />} />
-              <Route path="/admin/settings" element={<AdminSettings />} />
+              <Route path={ADMIN_BASE_PATH} element={<AdminDashboard />} />
+              <Route path={`${ADMIN_BASE_PATH}/media`} element={<AdminMedia />} />
+              <Route path={`${ADMIN_BASE_PATH}/ads`} element={<AdminAds />} />
+              <Route path={`${ADMIN_BASE_PATH}/analytics`} element={<AdminAnalytics />} />
+              <Route path={`${ADMIN_BASE_PATH}/users`} element={<AdminUsers />} />
+              <Route path={`${ADMIN_BASE_PATH}/settings`} element={<AdminSettings />} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
