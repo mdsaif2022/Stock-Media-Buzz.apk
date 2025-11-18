@@ -37,48 +37,38 @@ const queryClient = new QueryClient({
 });
 
 function BrowserNavigationHandler() {
-  const location = useLocation();
   const navigate = useNavigate();
-  const isHandlingRef = useRef(false);
+  const isProcessingRef = useRef(false);
 
   useEffect(() => {
-    // Handle browser back/forward button navigation
-    // This ensures React Router syncs with browser history
-    const handlePopState = () => {
-      // Prevent multiple handlers from interfering
-      if (isHandlingRef.current) return;
+    // Handle browser back/forward button presses
+    const handlePopState = (event: PopStateEvent) => {
+      // Prevent multiple simultaneous navigations
+      if (isProcessingRef.current) return;
       
-      isHandlingRef.current = true;
+      isProcessingRef.current = true;
       
-      // Get browser's current URL
-      const browserPath = window.location.pathname + window.location.search;
-      const browserHash = window.location.hash;
-      const browserUrl = browserPath + browserHash;
+      // Get the browser's current URL (browser already updated on popstate)
+      const browserUrl = window.location.pathname + window.location.search + window.location.hash;
       
-      // Get React Router's current URL
-      const routerPath = location.pathname + location.search;
-      const routerHash = location.hash || '';
-      const routerUrl = routerPath + routerHash;
+      // Force React Router to navigate to the browser's URL
+      // This ensures back/forward buttons work correctly
+      navigate(browserUrl, { replace: false });
       
-      // Only navigate if URLs don't match
-      if (browserUrl !== routerUrl) {
-        // Use setTimeout to ensure this runs after React Router's own handler
-        setTimeout(() => {
-          navigate(browserPath + browserHash, { replace: false });
-          isHandlingRef.current = false;
-        }, 0);
-      } else {
-        isHandlingRef.current = false;
-      }
+      // Reset flag after a brief delay to allow navigation to complete
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 100);
     };
 
-    // Add listener with normal (bubbling) phase to run after React Router's handler
+    // Listen for popstate events (browser back/forward)
+    // This runs when user presses browser back/forward buttons
     window.addEventListener("popstate", handlePopState);
     
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [location.pathname, location.search, location.hash, navigate]);
+  }, [navigate]);
 
   return null;
 }

@@ -24,12 +24,24 @@ const loadAdsterraScript = () => {
 if (typeof window !== "undefined") {
   loadAdsterraScript();
   
-  // Suppress font preload warnings from ad iframes (not our code)
-  const originalError = console.warn;
+  // Suppress console warnings from ad iframes (not our code)
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  
   console.warn = (...args: any[]) => {
     const message = args[0]?.toString() || '';
     // Ignore font preload warnings from ad networks
     if (message.includes('preload') && message.includes('was preloaded')) {
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+  
+  // Suppress 403 errors from ad network APIs (camterest.com, etc.)
+  console.error = (...args: any[]) => {
+    const message = args[0]?.toString() || '';
+    // Ignore 403 Forbidden errors from ad networks
+    if (message.includes('403') && (message.includes('camterest.com') || message.includes('Forbidden'))) {
       return;
     }
     originalError.apply(console, args);
