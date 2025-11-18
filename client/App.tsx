@@ -38,37 +38,53 @@ const queryClient = new QueryClient({
 
 function BrowserNavigationHandler() {
   const navigate = useNavigate();
-  const isProcessingRef = useRef(false);
+  const location = useLocation();
+  const processingRef = useRef(false);
+  const lastBrowserUrlRef = useRef<string>('');
+
+  useEffect(() => {
+    // Initialize with current browser URL
+    lastBrowserUrlRef.current = window.location.pathname + window.location.search + window.location.hash;
+  }, []);
+
+  useEffect(() => {
+    // Update last browser URL when React Router navigates
+    const currentUrl = window.location.pathname + window.location.search + window.location.hash;
+    lastBrowserUrlRef.current = currentUrl;
+  }, [location.pathname, location.search, location.hash]);
 
   useEffect(() => {
     // Handle browser back/forward button presses
     const handlePopState = (event: PopStateEvent) => {
-      // Prevent multiple simultaneous navigations
-      if (isProcessingRef.current) return;
+      if (processingRef.current) return;
       
-      isProcessingRef.current = true;
+      processingRef.current = true;
       
-      // Get the browser's current URL (browser already updated on popstate)
+      // Get browser's current URL (already updated by browser)
       const browserUrl = window.location.pathname + window.location.search + window.location.hash;
+      const routerUrl = location.pathname + location.search + (location.hash || '');
       
-      // Force React Router to navigate to the browser's URL
-      // This ensures back/forward buttons work correctly
-      navigate(browserUrl, { replace: false });
+      // If URLs don't match, sync React Router to browser
+      if (browserUrl !== routerUrl && browserUrl !== lastBrowserUrlRef.current) {
+        // Navigate React Router to match browser URL
+        // Use replace: true since browser already changed the URL
+        navigate(browserUrl, { replace: true });
+        lastBrowserUrlRef.current = browserUrl;
+      }
       
-      // Reset flag after a brief delay to allow navigation to complete
+      // Reset processing flag
       setTimeout(() => {
-        isProcessingRef.current = false;
-      }, 100);
+        processingRef.current = false;
+      }, 50);
     };
 
     // Listen for popstate events (browser back/forward)
-    // This runs when user presses browser back/forward buttons
     window.addEventListener("popstate", handlePopState);
     
     return () => {
       window.removeEventListener("popstate", handlePopState);
     };
-  }, [navigate]);
+  }, [navigate, location.pathname, location.search, location.hash]);
 
   return null;
 }
