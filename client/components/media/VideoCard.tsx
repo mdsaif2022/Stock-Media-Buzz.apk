@@ -36,9 +36,13 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
     ? `/api/media/preview/${media.id}` 
     : "";
 
+  // Determine if video should be loaded and visible
+  const shouldShowVideo = isHovering && supportsHover && videoUrl && !previewError;
+  const videoSrc = shouldShowVideo ? videoUrl : "";
+
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !shouldLoadVideo || !supportsHover) return;
+    if (!video || !supportsHover) return;
 
     const handleTimeUpdate = () => {
       if (video.currentTime >= PREVIEW_DURATION) {
@@ -52,60 +56,46 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate);
     };
-  }, [shouldLoadVideo, supportsHover]);
-
-  // Load video source when hovering
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !videoUrl || !isVideo) return;
-
-    if (isHovering && shouldLoadVideo && supportsHover && !previewError) {
-      // Set video src if not already set or if it changed
-      const currentSrc = video.getAttribute('src') || video.src;
-      if (!currentSrc || currentSrc !== videoUrl) {
-        video.src = videoUrl;
-        video.load(); // Force reload
-      }
-    }
-  }, [isHovering, shouldLoadVideo, supportsHover, videoUrl, isVideo, previewError]);
+  }, [supportsHover]);
 
   // Play/pause video based on hover state
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !videoUrl || !isVideo) return;
+    if (!video || !isVideo || !videoUrl) return;
 
-    if (isHovering && shouldLoadVideo && supportsHover && !previewError && isPreviewReady) {
-      // Wait for video to be ready before playing
-      const tryPlay = () => {
-        if (video.readyState >= 2) { // HAVE_CURRENT_DATA
-          video.currentTime = 0;
-          const playPromise = video.play();
-          if (playPromise) {
-            playPromise.catch(() => {
-              // Ignore play errors (e.g., autoplay blocked)
-            });
-          }
-        } else {
-          // Wait for video to load
-          const handleLoadedData = () => {
+    if (shouldShowVideo && isPreviewReady) {
+      // Video is ready, try to play
+      const tryPlay = async () => {
+        try {
+          if (video.readyState >= 2) { // HAVE_CURRENT_DATA
             video.currentTime = 0;
-            const playPromise = video.play();
-            if (playPromise) {
-              playPromise.catch(() => {
-                // Ignore play errors
-              });
-            }
-          };
-          video.addEventListener('loadeddata', handleLoadedData, { once: true });
-          video.addEventListener('canplay', handleLoadedData, { once: true });
+            await video.play();
+          } else {
+            // Wait for video to have enough data
+            const handleCanPlay = async () => {
+              video.currentTime = 0;
+              try {
+                await video.play();
+              } catch (err) {
+                // Autoplay blocked or other error - silently fail
+                console.warn("Video autoplay blocked:", err);
+              }
+            };
+            video.addEventListener('canplay', handleCanPlay, { once: true });
+            video.addEventListener('loadeddata', handleCanPlay, { once: true });
+          }
+        } catch (err) {
+          // Autoplay blocked or other error - silently fail
+          console.warn("Video play error:", err);
         }
       };
       tryPlay();
-    } else {
+    } else if (!isHovering || !supportsHover) {
+      // Not hovering, pause and reset
       video.pause();
       video.currentTime = 0;
     }
-  }, [isHovering, previewError, shouldLoadVideo, supportsHover, videoUrl, isVideo, isPreviewReady]);
+  }, [shouldShowVideo, isPreviewReady, isHovering, supportsHover, videoUrl, isVideo]);
 
   const meta = useMemo(() => {
     const downloads = Number(media.downloads) || 0;
@@ -134,30 +124,39 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
           <>
             <video
               ref={videoRef}
-              src={shouldLoadVideo && !previewError && videoUrl ? videoUrl : ""}
+              src={videoSrc}
               poster={thumbnailUrl}
               muted
               playsInline
-              preload={shouldLoadVideo && !previewError ? "metadata" : "none"}
-              className={cn("w-full h-full object-cover transition-opacity duration-200 absolute inset-0", {
-                "opacity-0": !isPreviewReady || previewError,
-                "opacity-100": isPreviewReady && !previewError,
+              preload={shouldShowVideo ? "metadata" : "none"}
+              className={cn("w-full h-full object-cover transition-opacity duration-200 absolute inset-0 z-10", {
+                "opacity-0": !isPreviewReady || previewError || !shouldShowVideo,
+                "opacity-100": isPreviewReady && !previewError && shouldShowVideo,
               })}
               onLoadedData={() => {
-                setIsPreviewReady(true);
-                setPreviewError(false);
+                if (shouldShowVideo) {
+                  setIsPreviewReady(true);
+                  setPreviewError(false);
+                }
               }}
               onCanPlay={() => {
-                setIsPreviewReady(true);
-                setPreviewError(false);
+                if (shouldShowVideo) {
+                  setIsPreviewReady(true);
+                  setPreviewError(false);
+                }
               }}
               onLoadedMetadata={() => {
+                if (shouldShowVideo) {
+                  setIsPreviewReady(true);
+                  setPreviewError(false);
+                }
+              }}
+              onWaiting={() => {
+                // Video is buffering, keep it visible
                 setIsPreviewReady(true);
-                setPreviewError(false);
               }}
               onError={(e) => {
-                // Silently handle video errors - just show thumbnail instead
-                // Common causes: network issues, invalid URL
+                // Handle video errors - show thumbnail instead
                 console.warn("Video preview error for media:", media.id, e);
                 setPreviewError(true);
                 setIsPreviewReady(false);
