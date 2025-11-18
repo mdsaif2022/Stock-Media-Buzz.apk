@@ -36,54 +36,43 @@ const queryClient = new QueryClient({
   },
 });
 
-function BrowserNavigationHandler() {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    // CRITICAL: Handle browser back/forward navigation
-    // This ensures React Router syncs with browser history
-    const handlePopState = () => {
-      // When back/forward button is pressed, browser URL changes
-      // We need to tell React Router to navigate to match
-      const targetUrl = window.location.pathname + window.location.search + window.location.hash;
-      
-      // Navigate React Router to match browser URL
-      // IMPORTANT: Use replace: false to maintain history stack
-      navigate(targetUrl, { replace: false });
-    };
-
-    // Add listener for browser navigation events
-    window.addEventListener("popstate", handlePopState);
-    
-    return () => {
-      window.removeEventListener("popstate", handlePopState);
-    };
-  }, [navigate]);
-
-  // Also sync when location changes via React Router
-  useEffect(() => {
-    const browserUrl = window.location.pathname + window.location.search + window.location.hash;
-    const routerUrl = location.pathname + location.search + (location.hash || '');
-    
-    // If browser URL doesn't match React Router (shouldn't happen, but safety check)
-    if (browserUrl !== routerUrl) {
-      // Sync browser to React Router (not the other way around in this case)
-      // This is just a safety net
-      if (window.history.state && window.history.state.key) {
-        // React Router manages history, so we trust it
-        return;
-      }
-    }
-  }, [location]);
-
-  return null;
-}
-
 function AppRoutes() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Debug: Log navigation events to console
+  useEffect(() => {
+    console.log("React Router location changed:", location.pathname);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    // Let React Router handle popstate naturally, but ensure sync
+    const handlePopState = () => {
+      const browserUrl = window.location.pathname + window.location.search + window.location.hash;
+      const routerUrl = location.pathname + location.search + (location.hash || '');
+      
+      console.log("popstate detected - Browser:", browserUrl, "Router:", routerUrl);
+      
+      // Only navigate if URLs truly don't match after a delay
+      // This allows React Router's own handler to run first
+      setTimeout(() => {
+        const currentBrowserUrl = window.location.pathname + window.location.search + window.location.hash;
+        const currentRouterUrl = location.pathname + location.search + (location.hash || '');
+        
+        if (currentBrowserUrl !== currentRouterUrl) {
+          console.log("URLs don't match after popstate, syncing:", currentBrowserUrl);
+          // Use replace: true since browser already navigated
+          navigate(currentBrowserUrl, { replace: true });
+        }
+      }, 10);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [navigate, location]);
+
   return (
     <>
-      <BrowserNavigationHandler />
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<Index />} />
