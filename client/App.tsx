@@ -22,7 +22,7 @@ import AdminAds from "./pages/admin/Ads";
 import AdminAnalytics from "./pages/admin/Analytics";
 import AdminUsers from "./pages/admin/Users";
 import AdminSettings from "./pages/admin/Settings";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { ADMIN_BASE_PATH } from "./constants/routes";
 import { apiFetch } from "@/lib/api";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -35,6 +35,37 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function AppRoutes() {
+  return (
+    <>
+      <ScrollToTop />
+      <Routes>
+        <Route path="/" element={<Index />} />
+        <Route path="/browse" element={<BrowseMedia />} />
+        <Route path="/categories" element={<Categories />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/creator" element={<CreatorDashboard />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/media/:id" element={<MediaDetail />} />
+
+        {/* Admin Routes */}
+        <Route path={ADMIN_BASE_PATH} element={<AdminDashboard />} />
+        <Route path={`${ADMIN_BASE_PATH}/media`} element={<AdminMedia />} />
+        <Route path={`${ADMIN_BASE_PATH}/ads`} element={<AdminAds />} />
+        <Route path={`${ADMIN_BASE_PATH}/analytics`} element={<AdminAnalytics />} />
+        <Route path={`${ADMIN_BASE_PATH}/users`} element={<AdminUsers />} />
+        <Route path={`${ADMIN_BASE_PATH}/settings`} element={<AdminSettings />} />
+
+        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </>
+  );
+}
 
 export default function App() {
   useEffect(() => {
@@ -64,32 +95,9 @@ export default function App() {
             <Toaster />
             <Sonner />
             <BrowserRouter>
-            <ScrollToTop />
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/browse" element={<BrowseMedia />} />
-              <Route path="/categories" element={<Categories />} />
-              <Route path="/contact" element={<Contact />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/creator" element={<CreatorDashboard />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/media/:id" element={<MediaDetail />} />
-
-              {/* Admin Routes */}
-              <Route path={ADMIN_BASE_PATH} element={<AdminDashboard />} />
-              <Route path={`${ADMIN_BASE_PATH}/media`} element={<AdminMedia />} />
-              <Route path={`${ADMIN_BASE_PATH}/ads`} element={<AdminAds />} />
-              <Route path={`${ADMIN_BASE_PATH}/analytics`} element={<AdminAnalytics />} />
-              <Route path={`${ADMIN_BASE_PATH}/users`} element={<AdminUsers />} />
-              <Route path={`${ADMIN_BASE_PATH}/settings`} element={<AdminSettings />} />
-
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+              <AppRoutes />
+            </BrowserRouter>
+          </TooltipProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>

@@ -28,6 +28,13 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
   const { thumbnailUrl } = useVideoThumbnail(media.fileUrl, media.previewUrl);
 
   const shouldLoadVideo = isInView || isHovering;
+  
+  // Use proxy URL for video preview to avoid CORS issues
+  // Only use proxy for videos, not other media types
+  const isVideo = media.category?.toLowerCase() === "video";
+  const videoUrl = (media.fileUrl && isVideo)
+    ? `/api/media/preview/${media.id}` 
+    : "";
 
   useEffect(() => {
     const video = videoRef.current;
@@ -47,21 +54,58 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
     };
   }, [shouldLoadVideo, supportsHover]);
 
+  // Load video source when hovering
   useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !videoUrl || !isVideo) return;
 
     if (isHovering && shouldLoadVideo && supportsHover && !previewError) {
-      video.currentTime = 0;
-      const playPromise = video.play();
-      if (playPromise) {
-        playPromise.catch(() => undefined);
+      // Set video src if not already set or if it changed
+      const currentSrc = video.getAttribute('src') || video.src;
+      if (!currentSrc || currentSrc !== videoUrl) {
+        video.src = videoUrl;
+        video.load(); // Force reload
       }
+    }
+  }, [isHovering, shouldLoadVideo, supportsHover, videoUrl, isVideo, previewError]);
+
+  // Play/pause video based on hover state
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoUrl || !isVideo) return;
+
+    if (isHovering && shouldLoadVideo && supportsHover && !previewError && isPreviewReady) {
+      // Wait for video to be ready before playing
+      const tryPlay = () => {
+        if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+          video.currentTime = 0;
+          const playPromise = video.play();
+          if (playPromise) {
+            playPromise.catch(() => {
+              // Ignore play errors (e.g., autoplay blocked)
+            });
+          }
+        } else {
+          // Wait for video to load
+          const handleLoadedData = () => {
+            video.currentTime = 0;
+            const playPromise = video.play();
+            if (playPromise) {
+              playPromise.catch(() => {
+                // Ignore play errors
+              });
+            }
+          };
+          video.addEventListener('loadeddata', handleLoadedData, { once: true });
+          video.addEventListener('canplay', handleLoadedData, { once: true });
+        }
+      };
+      tryPlay();
     } else {
       video.pause();
       video.currentTime = 0;
     }
-  }, [isHovering, previewError, shouldLoadVideo, supportsHover]);
+  }, [isHovering, previewError, shouldLoadVideo, supportsHover, videoUrl, isVideo, isPreviewReady]);
 
   const meta = useMemo(() => {
     const downloads = Number(media.downloads) || 0;
@@ -86,29 +130,59 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
       onFocus={() => setIsHovering(false)}
     >
       <div className="relative aspect-video bg-slate-900">
-        {media.fileUrl && !previewError ? (
+        {media.fileUrl && isVideo ? (
           <>
             <video
               ref={videoRef}
-              src={shouldLoadVideo ? media.fileUrl : ""}
+              src={shouldLoadVideo && !previewError && videoUrl ? videoUrl : ""}
               poster={thumbnailUrl}
               muted
               playsInline
-              preload={shouldLoadVideo ? "metadata" : "none"}
-              className={cn("w-full h-full object-cover transition-opacity duration-200", {
-                "opacity-0": !isPreviewReady,
+              preload={shouldLoadVideo && !previewError ? "metadata" : "none"}
+              className={cn("w-full h-full object-cover transition-opacity duration-200 absolute inset-0", {
+                "opacity-0": !isPreviewReady || previewError,
+                "opacity-100": isPreviewReady && !previewError,
               })}
-              onLoadedData={() => setIsPreviewReady(true)}
-              onError={() => setPreviewError(true)}
+              onLoadedData={() => {
+                setIsPreviewReady(true);
+                setPreviewError(false);
+              }}
+              onCanPlay={() => {
+                setIsPreviewReady(true);
+                setPreviewError(false);
+              }}
+              onLoadedMetadata={() => {
+                setIsPreviewReady(true);
+                setPreviewError(false);
+              }}
+              onError={(e) => {
+                // Silently handle video errors - just show thumbnail instead
+                // Common causes: network issues, invalid URL
+                console.warn("Video preview error for media:", media.id, e);
+                setPreviewError(true);
+                setIsPreviewReady(false);
+              }}
             />
-            {!isPreviewReady && (
-              <img
-                src={thumbnailUrl}
-                alt={media.title}
-                className="absolute inset-0 w-full h-full object-cover"
-                loading="lazy"
-                onError={() => setPreviewError(true)}
-              />
+            {/* Always show thumbnail as fallback */}
+            <img
+              src={thumbnailUrl}
+              alt={media.title}
+              className={cn("absolute inset-0 w-full h-full object-cover transition-opacity duration-200", {
+                "opacity-0": isPreviewReady && !previewError,
+                "opacity-100": !isPreviewReady || previewError,
+              })}
+              loading="lazy"
+              onError={() => {
+                // If thumbnail also fails, show unavailable message
+                setPreviewError(true);
+              }}
+            />
+            {/* Only show unavailable if both video and thumbnail fail */}
+            {previewError && !thumbnailUrl && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-gradient-to-br from-slate-600 to-slate-900 gap-2">
+                <Video className="w-10 h-10" />
+                <span className="text-sm font-medium">Video preview unavailable</span>
+              </div>
             )}
           </>
         ) : (

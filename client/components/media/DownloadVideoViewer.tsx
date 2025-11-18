@@ -35,7 +35,7 @@ export function DownloadVideoViewer({ media }: DownloadVideoViewerProps) {
           </div>
         </div>
       )}
-      {media.duration && (
+      {media.duration && media.duration !== "00:00" && (
         <span className="absolute bottom-3 right-3 bg-black/70 text-white px-2 py-0.5 rounded text-xs font-medium">
           {media.duration}
         </span>

@@ -32,11 +32,11 @@ export default function MediaDetail() {
           const data = await response.json();
           setMedia(data);
         } else {
-          navigate("/browse");
+          navigate("/browse", { replace: false });
         }
       } catch (error) {
         console.error("Failed to fetch media:", error);
-        navigate("/browse");
+        navigate("/browse", { replace: false });
       } finally {
         setIsLoading(false);
       }
@@ -91,6 +91,9 @@ export default function MediaDetail() {
     setIsDownloading(true);
     
     try {
+      const isApk = (media.category || "").toLowerCase() === "apk";
+      const proxyUrl = `/api/download/proxy/${media.id}`;
+      
       // Show Adsterra ad before download
       const adsterraLinks = [
         "https://www.effectivegatecpm.com/hfy73qcy?key=e260bfac004e18965e13c7172696c1a3",
@@ -98,38 +101,35 @@ export default function MediaDetail() {
       ];
       const randomAd = adsterraLinks[Math.floor(Math.random() * adsterraLinks.length)];
       
-      // Open ad in new window
+      // Determine file extension for download attribute
+      let fileExtension = 'mp4';
+      const urlParts = media.fileUrl.split('.');
+      if (urlParts.length > 1) {
+        const lastPart = urlParts[urlParts.length - 1].split('?')[0].split('#')[0];
+        if (lastPart && lastPart.length <= 5) {
+          fileExtension = lastPart.toLowerCase();
+        }
+      }
+      if (isApk) {
+        fileExtension = 'apk';
+      }
+      
+      // Create download link with download attribute to force download
+      const link = document.createElement("a");
+      link.href = proxyUrl;
+      // Always use download attribute to force download instead of opening in new tab
+      link.download = `${media.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${fileExtension}`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      
+      // Open ad window FIRST (while still in user gesture context)
       const adWindow = window.open(randomAd, "_blank", "width=800,height=600");
       
-      // Wait a bit for ad to load, then start download
+      // Small delay to ensure ad window opens, then trigger download
       setTimeout(() => {
         try {
-          // Use server proxy endpoint to bypass CORS issues
-          const proxyUrl = `/api/download/proxy/${media.id}`;
-          
-          // Create hidden iframe for download (more reliable than link.click())
-          const iframe = document.createElement('iframe');
-          iframe.style.display = 'none';
-          iframe.src = proxyUrl;
-          document.body.appendChild(iframe);
-          
-          // Also try direct link as fallback
-          const link = document.createElement("a");
-          link.href = proxyUrl;
-          link.target = "_blank";
-          link.download = media.title;
-          document.body.appendChild(link);
+          // Click the link to trigger download
           link.click();
-          
-          // Clean up after download starts
-          setTimeout(() => {
-            try {
-              document.body.removeChild(link);
-              document.body.removeChild(iframe);
-            } catch (e) {
-              // Ignore cleanup errors
-            }
-          }, 2000);
           
           // Track download (this happens after file starts downloading)
           apiFetch(`/api/download/${media.id}`, {
@@ -142,18 +142,37 @@ export default function MediaDetail() {
           
           setIsDownloading(false);
           
+          // Clean up link after download starts
+          setTimeout(() => {
+            try {
+              if (document.body.contains(link)) {
+                document.body.removeChild(link);
+              }
+            } catch {
+              // ignore cleanup errors
+            }
+          }, 2000);
+          
           // Close ad window after download starts
           setTimeout(() => {
             if (adWindow && !adWindow.closed) {
               adWindow.close();
             }
-          }, 2000);
+          }, 5000);
         } catch (downloadError) {
           console.error("Download error:", downloadError);
           setIsDownloading(false);
+          // Clean up on error
+          try {
+            if (document.body.contains(link)) {
+              document.body.removeChild(link);
+            }
+          } catch {
+            // ignore cleanup errors
+          }
           alert("Failed to download. Please try again.");
         }
-      }, 1500);
+      }, 100); // Small delay to ensure ad window opens first
     } catch (error) {
       console.error("Download error:", error);
       setIsDownloading(false);

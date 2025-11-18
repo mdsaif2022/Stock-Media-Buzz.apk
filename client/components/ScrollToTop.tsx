@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 
 /**
@@ -7,22 +7,32 @@ import { useLocation } from "react-router-dom";
  */
 export default function ScrollToTop() {
   const { pathname, hash } = useLocation();
+  const prevPathname = useRef(pathname);
 
   useEffect(() => {
-    if (hash) {
-      const targetId = hash.replace("#", "");
-      const element = document.getElementById(targetId);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "start" });
-        return;
+    // Only scroll if pathname actually changed (not just a re-render)
+    if (prevPathname.current !== pathname) {
+      prevPathname.current = pathname;
+
+      if (hash) {
+        // Small delay to ensure DOM is ready
+        setTimeout(() => {
+          const targetId = hash.replace("#", "");
+          const element = document.getElementById(targetId);
+          if (element) {
+            element.scrollIntoView({ behavior: "smooth", block: "start" });
+            return;
+          }
+        }, 0);
+      } else {
+        // Scroll to top
+        window.scrollTo({
+          top: 0,
+          left: 0,
+          behavior: "instant" in window ? ("instant" as ScrollBehavior) : "auto",
+        });
       }
     }
-
-    window.scrollTo({
-      top: 0,
-      left: 0,
-      behavior: "instant" in window ? ("instant" as ScrollBehavior) : "auto",
-    });
   }, [pathname, hash]);
 
   return null;

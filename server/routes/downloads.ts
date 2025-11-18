@@ -23,16 +23,33 @@ export const proxyDownload: RequestHandler = async (req, res) => {
       return;
     }
 
-    // Fetch the file from Cloudinary
-    const fileResponse = await fetch(media.fileUrl, {
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-      },
-    });
+    // Fetch the file from origin
+    let fileResponse: Response;
+    try {
+      fileResponse = await fetch(media.fileUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+        },
+      });
+    } catch (fetchErr: any) {
+      // Network error or invalid URL: fallback to redirect so user gets something
+      const fallbackUrl = media.fileUrl || media.previewUrl;
+      if (fallbackUrl) {
+        res.redirect(fallbackUrl);
+        return;
+      }
+      throw fetchErr;
+    }
 
     if (!fileResponse.ok) {
-      throw new Error(`Failed to fetch file: ${fileResponse.statusText}`);
+      // Upstream returned non-200; try redirecting
+      const fallbackUrl = media.fileUrl || media.previewUrl;
+      if (fallbackUrl) {
+        res.redirect(fallbackUrl);
+        return;
+      }
+      throw new Error(`Failed to fetch file: ${fileResponse.status} ${fileResponse.statusText}`);
     }
 
     // Get content type
@@ -78,10 +95,15 @@ export const proxyDownload: RequestHandler = async (req, res) => {
 
     const filename = `${media.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.${fileExtension}`;
 
-    // Set headers for download
+    // Set headers for transfer behavior
     res.setHeader('Content-Type', contentType);
+    // Always force download (attachment) to ensure files download instead of opening in browser
+    // This works better with the download attribute on the client side
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', fileResponse.headers.get('content-length') || '0');
+    const contentLength = fileResponse.headers.get('content-length') || undefined;
+    if (contentLength) {
+      res.setHeader('Content-Length', contentLength);
+    }
     res.setHeader('Cache-Control', 'no-cache');
 
     // Stream the file to the response
@@ -178,6 +200,100 @@ export const getDownloadStats: RequestHandler = (req, res) => {
   };
 
   res.json(stats);
+};
+
+// Proxy video for preview (streaming, not download) - bypasses CORS
+export const proxyVideoPreview: RequestHandler = async (req, res) => {
+  const { mediaId } = req.params;
+  
+  if (!mediaId) {
+    res.status(400).json({ error: "Media ID is required" });
+    return;
+  }
+
+  try {
+    // Find media in database
+    const media = mediaDatabase.find((m) => m.id === mediaId);
+    
+    if (!media) {
+      res.status(404).json({ error: "Media not found" });
+      return;
+    }
+
+    // Only proxy video files
+    const isVideo = media.category?.toLowerCase() === "video" || 
+                    media.fileUrl?.match(/\.(mp4|webm|ogg|mov|avi)$/i);
+    
+    if (!isVideo) {
+      res.status(400).json({ error: "Media is not a video" });
+      return;
+    }
+
+    // If fileUrl is a placeholder or invalid, return 404
+    if (!media.fileUrl || media.fileUrl.includes('example.com') || media.fileUrl.startsWith('data:')) {
+      res.status(404).json({ error: "Video file not available" });
+      return;
+    }
+
+    // Fetch the video from origin
+    let fileResponse: Response;
+    try {
+      fileResponse = await fetch(media.fileUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Range': req.headers.range || '', // Support range requests for video seeking
+        },
+      });
+    } catch (fetchErr: any) {
+      console.error("Video preview proxy error:", fetchErr);
+      res.status(500).json({ error: "Failed to fetch video", message: fetchErr.message });
+      return;
+    }
+
+    if (!fileResponse.ok) {
+      res.status(fileResponse.status).json({ 
+        error: "Failed to fetch video", 
+        message: fileResponse.statusText 
+      });
+      return;
+    }
+
+    // Get content type
+    const contentType = fileResponse.headers.get('content-type') || 'video/mp4';
+    
+    // Set headers for video streaming (not download)
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+    
+    // Handle range requests for video seeking
+    const range = req.headers.range;
+    if (range && fileResponse.headers.get('content-range')) {
+      const contentRange = fileResponse.headers.get('content-range');
+      const contentLength = fileResponse.headers.get('content-length');
+      
+      if (contentRange) {
+        res.setHeader('Content-Range', contentRange);
+        res.status(206); // Partial Content
+      }
+      if (contentLength) {
+        res.setHeader('Content-Length', contentLength);
+      }
+    } else {
+      const contentLength = fileResponse.headers.get('content-length');
+      if (contentLength) {
+        res.setHeader('Content-Length', contentLength);
+      }
+    }
+
+    // Stream the video to the response
+    const buffer = await fileResponse.arrayBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (error: any) {
+    console.error("Video preview proxy error:", error);
+    res.status(500).json({ error: "Failed to stream video", message: error.message });
+  }
 };
 
 // Helper function to get top downloaded media

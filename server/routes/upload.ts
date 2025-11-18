@@ -179,7 +179,7 @@ export const handleFileUpload: RequestHandler = async (req, res) => {
         category: category,
         type: type,
         fileSize: fileSize,
-        duration: file.resource_type === "video" ? "00:00" : undefined,
+        duration: undefined, // Duration will be detected client-side from video metadata
         previewUrl: file.secure_url,
         fileUrl: file.secure_url,
         tags: formTags.length > 0 ? formTags : [],
@@ -273,7 +273,7 @@ export const handleUrlUpload: RequestHandler = async (req, res) => {
       category: mediaCategory,
       type: mediaType,
       fileSize: "Unknown",
-      duration: resource_type === "video" ? "00:00" : undefined,
+      duration: undefined, // Duration will be detected client-side from video metadata
       previewUrl: previewUrl || result.secure_url,
       fileUrl: result.secure_url,
       tags: mediaTags,
