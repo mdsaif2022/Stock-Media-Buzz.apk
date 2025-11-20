@@ -121,6 +121,9 @@ export default function MediaDetail() {
       ];
       const randomAd = adsterraLinks[Math.floor(Math.random() * adsterraLinks.length)];
       
+      // Log which ad was selected for debugging (optional - remove in production if needed)
+      console.log(`Selected Adsteera ad: ${randomAd} (from ${adsterraLinks.length} total links)`);
+      
       // Determine file extension for download attribute
       let fileExtension = 'mp4';
       const urlParts = media.fileUrl.split('.');
