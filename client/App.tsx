@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -38,63 +38,9 @@ const queryClient = new QueryClient({
 
 function AppRoutes() {
   const location = useLocation();
-  const navigate = useNavigate();
 
-  // Debug: Log all navigation events
-  useEffect(() => {
-    console.log("📍 React Router location changed:", {
-      pathname: location.pathname,
-      search: location.search,
-      hash: location.hash,
-      browserUrl: window.location.pathname + window.location.search + window.location.hash
-    });
-  }, [location.pathname, location.search, location.hash]);
-
-  // Handle browser back/forward button navigation
-  useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      const browserUrl = window.location.pathname + window.location.search + window.location.hash;
-      const routerUrl = location.pathname + location.search + (location.hash || '');
-      
-      console.log("🔙 popstate detected:", {
-        browser: browserUrl,
-        router: routerUrl,
-        match: browserUrl === routerUrl
-      });
-      
-      // If URLs don't match after React Router handles it, force sync
-      if (browserUrl !== routerUrl) {
-        setTimeout(() => {
-          const currentBrowserUrl = window.location.pathname + window.location.search + window.location.hash;
-          const currentRouterUrl = location.pathname + location.search + (location.hash || '');
-          
-          if (currentBrowserUrl !== currentRouterUrl) {
-            console.log("⚠️ URLs still don't match, forcing sync to:", currentBrowserUrl);
-            navigate(currentBrowserUrl, { replace: true });
-          }
-        }, 50);
-      }
-    };
-
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [navigate, location.pathname, location.search, location.hash]);
-
-  // Monitor Link clicks to ensure React Router navigation works
-  useEffect(() => {
-    const handleClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      const link = target.closest('a[href]');
-      
-      if (link && link.getAttribute('href')?.startsWith('/')) {
-        const href = link.getAttribute('href');
-        console.log("🔗 Link clicked:", href, "Current location:", location.pathname);
-      }
-    };
-
-    document.addEventListener('click', handleClick, true);
-    return () => document.removeEventListener('click', handleClick, true);
-  }, [location.pathname]);
+  // React Router's BrowserRouter automatically handles browser back/forward buttons
+  // No custom popstate handler needed - it can interfere with React Router's navigation
 
   return (
     <>
