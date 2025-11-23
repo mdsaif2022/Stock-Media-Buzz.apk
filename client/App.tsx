@@ -38,9 +38,31 @@ const queryClient = new QueryClient({
 
 function AppRoutes() {
   const location = useLocation();
+  const navigate = useNavigate();
 
-  // React Router's BrowserRouter automatically handles browser back/forward buttons
-  // No custom popstate handler needed - it can interfere with React Router's navigation
+  // Handle browser back/forward button navigation
+  // Ensure React Router updates when browser history changes
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      // Get the current browser URL
+      const targetPath = window.location.pathname + window.location.search + window.location.hash;
+      const currentRouterPath = location.pathname + location.search + (location.hash || '');
+      
+      // If the browser URL doesn't match React Router's current location, sync them
+      // This ensures the page updates when back/forward buttons are clicked
+      if (targetPath !== currentRouterPath) {
+        // Navigate to match the browser URL (this will update React Router's location)
+        navigate(targetPath, { replace: false });
+      }
+    };
+
+    // Listen for browser back/forward button clicks
+    window.addEventListener("popstate", handlePopState);
+    
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [navigate, location]);
 
   return (
     <>
