@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
-import { Link, useSearchParams, useParams, useNavigate } from "react-router-dom";
+import { Link, useSearchParams, useParams, useNavigate, useNavigationType } from "react-router-dom";
 import { Loader2, Search, Filter, Play, Image as ImageIcon, Music, Smartphone, FileText, ArrowRight } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Media } from "@shared/api";
@@ -27,6 +27,7 @@ export default function BrowseMedia() {
   const { category: categoryParam } = useParams<{ category?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const navigationType = useNavigationType(); // 'POP' = browser back/forward, 'PUSH' = programmatic, 'REPLACE' = replace
   
   // Get category from URL path param (new structure) or query param (legacy)
   const rawCategory = categoryParam || searchParams.get("category");
@@ -37,9 +38,20 @@ export default function BrowseMedia() {
   // Sync URL path with category when category changes via query params (for backward compatibility)
   // Only sync ONCE on initial mount if we have a category in query params but not in path params
   // This prevents creating excessive history entries
+  // CRITICAL: Never sync on browser back/forward navigation (POP)
   const hasSyncedRef = useRef(false);
   
   useEffect(() => {
+    // CRITICAL: Don't sync URL if this is browser back/forward navigation
+    // React Router's useNavigationType returns 'POP' for browser back/forward button
+    const isBrowserNavigation = navigationType === 'POP';
+    
+    if (isBrowserNavigation) {
+      // On browser navigation, just mark as synced to prevent any redirects
+      hasSyncedRef.current = true;
+      return;
+    }
+    
     // Only sync ONCE if:
     // 1. We haven't synced yet (hasSyncedRef.current === false)
     // 2. We have a category in query params but NOT in path params (legacy URL: ?category=video)
@@ -67,7 +79,7 @@ export default function BrowseMedia() {
         hasSyncedRef.current = true;
       }
     }
-  }, [activeCategory, categoryParam, searchParams, navigate]);
+  }, [activeCategory, categoryParam, searchParams, navigate, navigationType]);
 
   const [mediaItems, setMediaItems] = useState<Media[]>([]);
   const [page, setPage] = useState(1);
