@@ -1,6 +1,6 @@
 import Layout from "@/components/Layout";
 import { Download, Share2, Heart, Clock, Eye, Tag, AlertCircle, Play, Image as ImageIcon, Music, Zap, Check, Smartphone } from "lucide-react";
-import { Link, useParams, useNavigate, useNavigationType } from "react-router-dom";
+import { Link, useParams, useNavigate, useNavigationType, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { Media, MediaResponse } from "@shared/api";
 import { apiFetch, API_BASE_URL } from "@/lib/api";
@@ -8,11 +8,14 @@ import { DownloadVideoViewer } from "@/components/media/DownloadVideoViewer";
 import { VideoCard } from "@/components/media/VideoCard";
 import { AudioPlayer } from "@/components/media/AudioPlayer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { isBackNavigationActive } from "@/utils/backNavigationDetector";
 
 export default function MediaDetail() {
   const { category, id } = useParams<{ category?: string; id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const navigationType = useNavigationType(); // 'POP' = browser back/forward, 'PUSH' = programmatic, 'REPLACE' = replace
+  const prevLocationRef = useRef(location.pathname + location.search);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [media, setMedia] = useState<Media | null>(null);
@@ -30,20 +33,33 @@ export default function MediaDetail() {
     const fetchMedia = async () => {
       if (!id) return;
       
-      // CRITICAL: Don't redirect if this is browser back/forward navigation (POP)
-      // React Router's useNavigationType returns 'POP' for browser back/forward button
-      const isBrowserNavigation = navigationType === 'POP';
+      // CRITICAL: Don't redirect if this is browser back/forward navigation
+      // Use both useNavigationType AND the global back navigation detector for reliability
+      const isBrowserNavigation = navigationType === 'POP' || isBackNavigationActive();
+      
+      // Also check if location changed backwards (pathname went from longer to shorter)
+      const currentPath = location.pathname + location.search;
+      const prevPath = prevLocationRef.current;
+      const isPathGoingBack = currentPath.length < prevPath.length || 
+                              (prevPath.includes('/browse/') && currentPath === '/browse');
+      
+      // Update previous location
+      prevLocationRef.current = currentPath;
+      
+      // If it's browser navigation OR path is going back, don't redirect
+      const isBackNav = isBrowserNavigation || isPathGoingBack;
       
       // Reset redirect tracking when ID changes (but not on browser navigation)
-      if (!isBrowserNavigation && lastRedirectedIdRef.current !== id) {
+      if (!isBackNav && lastRedirectedIdRef.current !== id) {
         lastRedirectedIdRef.current = null;
       }
       
       // Don't redirect if:
-      // 1. This is browser back/forward navigation (POP)
-      // 2. We're already on hierarchical URL (category exists)
-      // 3. We've already redirected for this ID
-      const shouldRedirect = !isBrowserNavigation && !category;
+      // 1. This is browser back/forward navigation (POP or detected via popstate)
+      // 2. Path is going backwards (shorter path)
+      // 3. We're already on hierarchical URL (category exists)
+      // 4. We've already redirected for this ID
+      const shouldRedirect = !isBackNav && !category;
       
       try {
         setIsLoading(true);
@@ -67,7 +83,7 @@ export default function MediaDetail() {
           
         } else {
           // Only redirect on error if NOT browser navigation
-          if (!isBrowserNavigation) {
+          if (!isBackNav) {
             // Use replace: true to avoid adding to history when media not found
             // Navigate back to category page if category exists, otherwise to browse
             if (category) {
@@ -80,7 +96,7 @@ export default function MediaDetail() {
       } catch (error) {
         console.error("Failed to fetch media:", error);
         // Only redirect on error if NOT browser navigation
-        if (!isBrowserNavigation) {
+        if (!isBackNav) {
           // Use replace: true to avoid adding to history when error occurs
           // Navigate back to category page if category exists, otherwise to browse
           if (category) {
@@ -95,8 +111,8 @@ export default function MediaDetail() {
     };
 
     fetchMedia();
-    // Include all dependencies: id, navigationType, and category (used in shouldRedirect logic)
-  }, [id, navigationType, category, navigate]);
+    // Include all dependencies: id, navigationType, category, and location (used in shouldRedirect logic)
+  }, [id, navigationType, category, navigate, location.pathname, location.search]);
 
   useEffect(() => {
     if (!media) {

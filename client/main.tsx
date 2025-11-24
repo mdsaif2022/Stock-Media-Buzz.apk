@@ -2,6 +2,7 @@ import "./global.css";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { setupHistoryGuard } from "./utils/historyGuard";
+import { setupBackNavigationDetector } from "./utils/backNavigationDetector";
 
 // Load Adsterra script (replace with actual Adsterra ID)
 const loadAdsterraScript = () => {
@@ -25,6 +26,8 @@ const loadAdsterraScript = () => {
 if (typeof window !== "undefined") {
   // Setup history guard FIRST to prevent duplicate URL entries
   setupHistoryGuard();
+  // Setup back navigation detector to reliably detect browser back/forward
+  setupBackNavigationDetector();
   // Suppress console warnings from ad iframes (not our code)
   // Set this up BEFORE loading Adsterra to catch early errors
   const originalWarn = console.warn;

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, useRef } from "react";
-import { Link, useSearchParams, useParams, useNavigate, useNavigationType } from "react-router-dom";
+import { Link, useSearchParams, useParams, useNavigate, useNavigationType, useLocation } from "react-router-dom";
 import { Loader2, Search, Filter, Play, Image as ImageIcon, Music, Smartphone, FileText, ArrowRight } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Media } from "@shared/api";
 import { apiFetch } from "@/lib/api";
 import { VideoCard } from "@/components/media/VideoCard";
+import { isBackNavigationActive } from "@/utils/backNavigationDetector";
 
 const CATEGORY_OPTIONS: Array<{ id: string; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: "all", label: "All", icon: Filter },
@@ -27,7 +28,9 @@ export default function BrowseMedia() {
   const { category: categoryParam } = useParams<{ category?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const navigationType = useNavigationType(); // 'POP' = browser back/forward, 'PUSH' = programmatic, 'REPLACE' = replace
+  const prevLocationRef = useRef(location.pathname + location.search);
   
   // Get category from URL path param (new structure) or query param (legacy)
   const rawCategory = categoryParam || searchParams.get("category");
@@ -43,10 +46,21 @@ export default function BrowseMedia() {
   
   useEffect(() => {
     // CRITICAL: Don't sync URL if this is browser back/forward navigation
-    // React Router's useNavigationType returns 'POP' for browser back/forward button
-    const isBrowserNavigation = navigationType === 'POP';
+    // Use both useNavigationType AND the global back navigation detector for reliability
+    const isBrowserNavigation = navigationType === 'POP' || isBackNavigationActive();
     
-    if (isBrowserNavigation) {
+    // Also check if location changed backwards
+    const currentPath = location.pathname + location.search;
+    const prevPath = prevLocationRef.current;
+    const isPathGoingBack = currentPath.length < prevPath.length;
+    
+    // Update previous location
+    prevLocationRef.current = currentPath;
+    
+    // If it's browser navigation OR path is going back, don't sync
+    const isBackNav = isBrowserNavigation || isPathGoingBack;
+    
+    if (isBackNav) {
       // On browser navigation, just mark as synced to prevent any redirects
       hasSyncedRef.current = true;
       return;
@@ -79,7 +93,7 @@ export default function BrowseMedia() {
         hasSyncedRef.current = true;
       }
     }
-  }, [activeCategory, categoryParam, searchParams, navigate, navigationType]);
+  }, [activeCategory, categoryParam, searchParams, navigate, navigationType, location.pathname, location.search]);
 
   const [mediaItems, setMediaItems] = useState<Media[]>([]);
   const [page, setPage] = useState(1);
