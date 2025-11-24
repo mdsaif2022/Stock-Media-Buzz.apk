@@ -21,20 +21,29 @@
         'use strict';
         if (typeof window === 'undefined') return;
         
-        // Log initial history state IMMEDIATELY
+        // Log initial history state IMMEDIATELY (before anything else)
         const initialHistoryLength = window.history.length;
+        console.log('[Early Guard] ⚡ Running IMMEDIATELY on page load');
         console.log('[Early Guard] Initial history length:', initialHistoryLength);
+        console.log('[Early Guard] Current URL:', window.location.href);
         
-        // If history is already polluted, warn about it
+        // If history is already polluted, this is a serious problem
         if (initialHistoryLength > 10) {
-          console.error('[Early Guard] ⚠️ WARNING: History length is', initialHistoryLength, 'on page load!');
-          console.error('[Early Guard] This means duplicates exist from a previous session');
-          console.error('[Early Guard] The back button will NOT work until history is cleared');
+          console.error('[Early Guard] ❌ CRITICAL: History length is', initialHistoryLength, 'on page load!');
+          console.error('[Early Guard] This should be 1 after a hard refresh!');
           console.error('[Early Guard]');
-          console.error('[Early Guard] 🔧 SOLUTION: Do a HARD REFRESH:');
-          console.error('[Early Guard]   Windows/Linux: Ctrl + Shift + R');
-          console.error('[Early Guard]   Mac: Cmd + Shift + R');
-          console.error('[Early Guard]   Or close tab and open new one');
+          console.error('[Early Guard] Possible causes:');
+          console.error('[Early Guard]   1. Browser session restore (check browser settings)');
+          console.error('[Early Guard]   2. Service worker preserving state (check DevTools > Application > Service Workers)');
+          console.error('[Early Guard]   3. Browser extension interfering');
+          console.error('[Early Guard]');
+          console.error('[Early Guard] 🔧 Try these solutions:');
+          console.error('[Early Guard]   - Close ALL tabs of this site, then open new one');
+          console.error('[Early Guard]   - Clear browser cache and cookies for this site');
+          console.error('[Early Guard]   - Disable service workers (DevTools > Application > Service Workers > Unregister)');
+          console.error('[Early Guard]   - Try incognito/private mode');
+        } else {
+          console.log('[Early Guard] ✅ History length is normal:', initialHistoryLength);
         }
         
         // Store original pushState IMMEDIATELY
