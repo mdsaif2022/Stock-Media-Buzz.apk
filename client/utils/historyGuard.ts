@@ -4,11 +4,18 @@
  * This utility prevents the issue where multiple history entries are created
  * with the same URL, making the back button ineffective, especially on mobile devices.
  * 
+ * Features:
+ * - Blocks rapid duplicate pushState calls from ad scripts
+ * - Never interferes with React Router navigation
+ * - Tracks programmatic navigation to distinguish from user back button
+ * - Works on both mobile and desktop browsers
+ * 
  * Usage: Import and call `setupHistoryGuard()` in main.tsx
  */
 
 let lastUrl: string | null = null;
 let isGuarding = false;
+let isProgrammaticNavigation = false;
 
 /**
  * Get a unique identifier for the current URL
@@ -54,6 +61,20 @@ function normalizeUrl(url: string | URL | null | undefined, baseUrl: string = wi
 }
 
 /**
+ * Set flag to indicate programmatic navigation (from React Router)
+ * This helps distinguish between user back button and programmatic navigation
+ */
+export function setProgrammaticNavigation(value: boolean): void {
+  isProgrammaticNavigation = value;
+  // Auto-reset after short delay
+  if (value) {
+    setTimeout(() => {
+      isProgrammaticNavigation = false;
+    }, 100);
+  }
+}
+
+/**
  * Monitor history API to detect duplicate entries
  * Very conservative - only blocks obvious spam, never interferes with React Router
  */
@@ -67,10 +88,12 @@ export function setupHistoryGuard() {
 
   // Store original methods
   const originalPushState = window.history.pushState;
+  const originalReplaceState = window.history.replaceState;
 
   // Track the last URL that was pushed (not replaced)
   let lastPushedUrl: string | null = null;
   let lastPushStateCallTime = 0;
+  let pushStateCallStack: string[] = []; // Track recent pushState calls for spam detection
 
   // Override pushState to prevent duplicate entries
   // VERY CONSERVATIVE: Only block if it's the EXACT same URL pushed multiple times in rapid succession (< 50ms)
@@ -84,20 +107,37 @@ export function setupHistoryGuard() {
     const currentUrlKey = getUrlKey();
     const newUrlKey = normalizeUrl(url);
     
+    // If this is programmatic navigation from React Router, always allow it
+    if (isProgrammaticNavigation) {
+      lastPushedUrl = newUrlKey;
+      return originalPushState.call(window.history, state, title, url);
+    }
+    
+    // Track recent calls (keep last 5 for spam detection)
+    pushStateCallStack.push(newUrlKey);
+    if (pushStateCallStack.length > 5) {
+      pushStateCallStack.shift();
+    }
+    
     // VERY STRICT: Only block if:
     // 1. It's the EXACT same URL as current (including query/hash)
     // 2. AND it's the same as the last pushed URL
     // 3. AND it happened within 50ms (very rapid - definitely spam)
-    // This ensures we NEVER block legitimate React Router navigation
+    // OR: Same URL appears 3+ times in recent calls (spam pattern)
     const isRapidExactDuplicate = 
       newUrlKey === currentUrlKey && 
       lastPushedUrl === newUrlKey && 
       timeSinceLastPush < 50;
     
-    if (isRapidExactDuplicate) {
+    const isSpamPattern = pushStateCallStack.filter(u => u === newUrlKey).length >= 3;
+    
+    if (isRapidExactDuplicate || isSpamPattern) {
       // This is definitely spam - use replaceState instead
-      console.warn('[History Guard] Blocking rapid duplicate:', newUrlKey);
-      return window.history.replaceState(state, title, url);
+      console.warn('[History Guard] Blocking duplicate/spam:', newUrlKey, {
+        rapid: isRapidExactDuplicate,
+        spamPattern: isSpamPattern,
+      });
+      return originalReplaceState.call(window.history, state, title, url);
     }
     
     // Update tracking for next comparison
@@ -107,18 +147,25 @@ export function setupHistoryGuard() {
     return originalPushState.call(window.history, state, title, url);
   };
 
+  // Also protect replaceState from being abused
+  window.history.replaceState = function(state: any, title: string, url?: string | URL | null) {
+    // Always allow replaceState (it's used for redirects and is safe)
+    return originalReplaceState.call(window.history, state, title, url);
+  };
+
   // Monitor popstate events ONLY for tracking (don't interfere with React Router)
   // Use bubble phase so React Router handles it first
-  window.addEventListener('popstate', () => {
+  window.addEventListener('popstate', (event) => {
     const newUrl = getUrlKey();
     if (lastUrl !== newUrl) {
       lastUrl = newUrl;
       lastPushedUrl = null; // Reset on navigation
       lastPushStateCallTime = 0; // Reset timing
+      pushStateCallStack = []; // Clear spam detection stack
     }
   }); // Use default bubble phase - let React Router handle it first
 
-  console.log('[History Guard] Active - very conservative mode (mobile-optimized)');
+  console.log('[History Guard] Active - very conservative mode (mobile & desktop optimized)');
 }
 
 /**

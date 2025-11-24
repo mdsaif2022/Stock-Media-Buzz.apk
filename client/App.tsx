@@ -27,6 +27,7 @@ import React, { useEffect } from "react";
 import { ADMIN_BASE_PATH } from "./constants/routes";
 import { apiFetch } from "@/lib/api";
 import ScrollToTop from "@/components/ScrollToTop";
+import "@/utils/navigationDebug"; // Initialize debug utilities in development
 
 const queryClient = new QueryClient({
   defaultOptions: {
