@@ -16,6 +16,7 @@
 let lastUrl: string | null = null;
 let isGuarding = false;
 let isProgrammaticNavigation = false;
+let isHistoryGuardEnabled = true; // Allow disabling for testing
 
 /**
  * Get a unique identifier for the current URL
@@ -85,6 +86,9 @@ export function setupHistoryGuard() {
 
   isGuarding = true;
   lastUrl = getUrlKey();
+  
+  // Store original pushState before overriding
+  const originalPushState = window.history.pushState;
 
   // Store original methods
   const originalPushState = window.history.pushState;
@@ -99,6 +103,10 @@ export function setupHistoryGuard() {
   // AGGRESSIVE: Block ANY pushState with the same URL as current (prevents duplicate history entries)
   // This fixes the issue where 9+ duplicate entries break the back button
   window.history.pushState = function(state: any, title: string, url?: string | URL | null) {
+    // If guard is disabled, use original pushState
+    if (!isHistoryGuardEnabled) {
+      return originalPushState.call(window.history, state, title, url);
+    }
     const now = Date.now();
     const timeSinceLastPush = now - lastPushStateCallTime;
     lastPushStateCallTime = now;
