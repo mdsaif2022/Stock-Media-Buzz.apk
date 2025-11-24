@@ -115,6 +115,7 @@ export function setupHistoryGuard() {
     // CRITICAL: If URL is different, always allow (legitimate navigation)
     if (newUrlKey !== currentUrlKey) {
       lastPushedUrl = newUrlKey;
+      logPushState(newUrlKey, false, 'Different URL - legitimate navigation');
       return originalPushState.call(window.history, state, title, url);
     }
     
@@ -140,17 +141,20 @@ export function setupHistoryGuard() {
     if (isReactRouterCall) {
       // React Router navigation - allow it (might be updating state or handling navigation)
       lastPushedUrl = newUrlKey;
+      logPushState(newUrlKey, false, 'React Router navigation - allowing');
       return originalPushState.call(window.history, state, title, url);
     }
     
     // Same URL AND not from React Router - this is likely a duplicate from ad scripts or other code
     // ALWAYS block same-URL pushState unless it's from React Router (which we already checked above)
     // This prevents duplicate history entries that break the back button
+    logPushState(newUrlKey, true, 'Same URL and not React Router - blocking duplicate');
     console.warn('[History Guard] Blocking duplicate pushState (same URL):', newUrlKey, {
       timeSinceLastPush,
       isProgrammaticNavigation,
       hasReactRouterState,
       action: 'Using replaceState instead of pushState',
+      stack: stack.split('\n').slice(0, 3).join('\n'), // Show first 3 stack frames
     });
     return originalReplaceState.call(window.history, state, title, url);
   };
@@ -178,6 +182,19 @@ export function setupHistoryGuard() {
   }, false); // Use bubble phase (default) - React Router handles it first
 
   console.log('[History Guard] Active - aggressive mode (blocks duplicate same-URL entries)');
+  console.log('[History Guard] Initial history length:', window.history.length);
+  
+  // Log all pushState calls for debugging
+  const logPushState = (url: string, isBlocked: boolean, reason: string) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[History Guard] ${isBlocked ? 'BLOCKED' : 'ALLOWED'} pushState:`, {
+        url,
+        reason,
+        historyLength: window.history.length,
+        currentUrl: window.location.href,
+      });
+    }
+  };
 }
 
 /**

@@ -24,8 +24,16 @@ const loadAdsterraScript = () => {
 
 // Load Adsterra on app start (non-blocking)
 if (typeof window !== "undefined") {
-  // Setup history guard FIRST to prevent duplicate URL entries
+  // Setup history guard FIRST (before anything else) to prevent duplicate URL entries
+  // This must run before React Router or any other code that might use history API
   setupHistoryGuard();
+  
+  // Log initial state
+  console.log('[Main] Initial history state:', {
+    length: window.history.length,
+    url: window.location.href,
+  });
+  
   // Setup back navigation detector to reliably detect browser back/forward
   setupBackNavigationDetector();
   // Suppress console warnings from ad iframes (not our code)
