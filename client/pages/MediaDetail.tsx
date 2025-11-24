@@ -27,6 +27,7 @@ export default function MediaDetail() {
   const [downloadAttempts, setDownloadAttempts] = useState(0); // Track number of download button clicks
   const downloadAttemptsRef = useRef(0); // Ref to track attempts synchronously (fixes rapid click bug)
   const lastRedirectedIdRef = useRef<string | null>(null); // Track which ID we redirected for
+  const isProcessingBackNavRef = useRef(false); // Track if we're currently processing back navigation
 
   // Fetch media data from API
   useEffect(() => {
@@ -36,6 +37,12 @@ export default function MediaDetail() {
       // CRITICAL: Don't redirect if this is browser back/forward navigation
       // Use multiple detection methods for maximum reliability
       const isBrowserNavigation = navigationType === 'POP' || isBackNavigationActive();
+      
+      // If we're processing back navigation, skip everything
+      if (isProcessingBackNavRef.current) {
+        console.log('[MediaDetail] Skipping redirect - processing back navigation');
+        return;
+      }
       
       // Also check if location changed backwards (pathname went from longer to shorter)
       const currentPath = location.pathname + location.search;
@@ -62,9 +69,18 @@ export default function MediaDetail() {
       // If it's browser navigation OR path is going back, don't redirect
       const isBackNav = wasBackNav;
       
+      // Set flag if this is back navigation
+      if (isBackNav) {
+        isProcessingBackNavRef.current = true;
+        // Clear flag after a delay to allow navigation to complete
+        setTimeout(() => {
+          isProcessingBackNavRef.current = false;
+        }, 2000); // Keep flag active for 2 seconds to prevent any redirects
+      }
+      
       // DEBUG: Log detection in development
       if (process.env.NODE_ENV === 'development' && isBackNav) {
-        console.log('[MediaDetail] Back navigation detected:', {
+        console.log('[MediaDetail] Back navigation detected - BLOCKING redirects:', {
           navigationType,
           isBackNavigationActive: isBackNavigationActive(),
           isPathGoingBack,
@@ -83,7 +99,8 @@ export default function MediaDetail() {
       // 2. Path is going backwards (shorter path)
       // 3. We're already on hierarchical URL (category exists)
       // 4. We've already redirected for this ID
-      const shouldRedirect = !isBackNav && !category;
+      // 5. We're currently processing back navigation
+      const shouldRedirect = !isBackNav && !category && !isProcessingBackNavRef.current;
       
       try {
         setIsLoading(true);
