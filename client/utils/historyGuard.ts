@@ -86,6 +86,21 @@ export function setupHistoryGuard() {
 
   isGuarding = true;
   lastUrl = getUrlKey();
+  
+  // Log initial state
+  const initialLength = window.history.length;
+  console.log('[History Guard] Setting up guard...', {
+    initialHistoryLength: initialLength,
+    currentUrl: window.location.href,
+    timestamp: new Date().toISOString(),
+  });
+  
+  // If history length is already high, warn about it
+  if (initialLength > 10) {
+    console.warn('[History Guard] WARNING: History length is already', initialLength, 'on setup!');
+    console.warn('[History Guard] This suggests duplicates were created before guard was set up');
+    console.warn('[History Guard] Solution: Refresh the page to clear history');
+  }
 
   // Store original methods
   const originalPushState = window.history.pushState;
