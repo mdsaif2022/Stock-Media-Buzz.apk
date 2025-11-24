@@ -34,6 +34,8 @@ import "@/utils/diagnoseBackButton"; // Initialize comprehensive diagnosis utili
 import "@/utils/testBackButtonSimple"; // Initialize simple back button test
 import "@/utils/diagnoseHistory"; // Initialize history diagnosis utility
 import "@/utils/cleanHistory"; // Initialize history cleanup utility
+import "@/utils/debugBackButton"; // Initialize back button debug utility
+import "@/utils/checkHistoryEntries"; // Initialize history entries checker
 
 const queryClient = new QueryClient({
   defaultOptions: {
