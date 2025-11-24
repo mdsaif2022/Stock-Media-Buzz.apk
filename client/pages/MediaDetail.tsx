@@ -34,14 +34,30 @@ export default function MediaDetail() {
     const fetchMedia = async () => {
       if (!id) return;
       
-      // CRITICAL: Don't redirect if this is browser back/forward navigation
-      // Use multiple detection methods for maximum reliability
+      // CRITICAL: Check back navigation FIRST - if active, skip ALL redirect logic
       const isBrowserNavigation = navigationType === 'POP' || isBackNavigationActive();
       
-      // If we're processing back navigation, skip everything
-      if (isProcessingBackNavRef.current) {
-        console.log('[MediaDetail] Skipping redirect - processing back navigation');
-        return;
+      // If we're processing back navigation, skip everything immediately
+      if (isProcessingBackNavRef.current || isBrowserNavigation) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[MediaDetail] Back navigation detected - BLOCKING all redirects');
+        }
+        // Just fetch media, don't redirect
+        try {
+          setIsLoading(true);
+          const response = await apiFetch(`/api/media/${id}`);
+          if (response.ok) {
+            const data = await response.json();
+            setMedia(data);
+            setDownloadAttempts(0);
+            downloadAttemptsRef.current = 0;
+          }
+        } catch (error) {
+          console.error("Failed to fetch media:", error);
+        } finally {
+          setIsLoading(false);
+        }
+        return; // Exit early - no redirects during back navigation
       }
       
       // Also check if location changed backwards (pathname went from longer to shorter)
@@ -49,7 +65,6 @@ export default function MediaDetail() {
       const prevPath = prevLocationRef.current;
       
       // More reliable back detection: check if we're going to a parent route
-      // e.g., /browse/video/123 -> /browse/video (back) or /browse/video/123 -> /browse (back)
       const prevPathParts = prevPath.split('/').filter(Boolean);
       const currentPathParts = currentPath.split('/').filter(Boolean);
       const isPathGoingBack = 
@@ -57,50 +72,43 @@ export default function MediaDetail() {
         (prevPath.includes('/browse/') && currentPath === '/browse') ||
         (prevPath.startsWith('/browse/') && currentPath.startsWith('/browse/') && 
          prevPathParts.length > currentPathParts.length) ||
-        // Also check if going from detail page to list page (back navigation)
         (prevPath.match(/\/browse\/[^/]+\/[^/]+$/) && currentPath.match(/\/browse\/[^/]+$/));
-      
-      // Update previous location AFTER checking (so we can compare on next render)
-      const wasBackNav = isBrowserNavigation || isPathGoingBack;
       
       // Update previous location for next comparison
       prevLocationRef.current = currentPath;
       
-      // If it's browser navigation OR path is going back, don't redirect
-      const isBackNav = wasBackNav;
-      
-      // Set flag if this is back navigation
-      if (isBackNav) {
+      // If path is going back, set processing flag and skip redirects
+      if (isPathGoingBack) {
         isProcessingBackNavRef.current = true;
-        // Clear flag after a delay to allow navigation to complete
         setTimeout(() => {
           isProcessingBackNavRef.current = false;
-        }, 2000); // Keep flag active for 2 seconds to prevent any redirects
+        }, 2000);
+        
+        // Just fetch media, don't redirect
+        try {
+          setIsLoading(true);
+          const response = await apiFetch(`/api/media/${id}`);
+          if (response.ok) {
+            const data = await response.json();
+            setMedia(data);
+            setDownloadAttempts(0);
+            downloadAttemptsRef.current = 0;
+          }
+        } catch (error) {
+          console.error("Failed to fetch media:", error);
+        } finally {
+          setIsLoading(false);
+        }
+        return; // Exit early - no redirects
       }
       
-      // DEBUG: Log detection in development
-      if (process.env.NODE_ENV === 'development' && isBackNav) {
-        console.log('[MediaDetail] Back navigation detected - BLOCKING redirects:', {
-          navigationType,
-          isBackNavigationActive: isBackNavigationActive(),
-          isPathGoingBack,
-          prevPath,
-          currentPath,
-        });
-      }
-      
-      // Reset redirect tracking when ID changes (but not on browser navigation)
-      if (!isBackNav && lastRedirectedIdRef.current !== id) {
+      // Reset redirect tracking when ID changes
+      if (lastRedirectedIdRef.current !== id) {
         lastRedirectedIdRef.current = null;
       }
       
-      // Don't redirect if:
-      // 1. This is browser back/forward navigation (POP or detected via popstate)
-      // 2. Path is going backwards (shorter path)
-      // 3. We're already on hierarchical URL (category exists)
-      // 4. We've already redirected for this ID
-      // 5. We're currently processing back navigation
-      const shouldRedirect = !isBackNav && !category && !isProcessingBackNavRef.current;
+      // Only redirect if we're NOT on back navigation AND don't have category
+      const shouldRedirect = !category;
       
       try {
         setIsLoading(true);
