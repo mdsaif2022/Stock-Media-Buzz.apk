@@ -213,14 +213,23 @@ export function setupHistoryGuard() {
   console.log('[History Guard] Initial history length:', window.history.length);
   
   // Log all pushState calls for debugging
+  // Always log in development, and log warnings in production
   const logPushState = (url: string, isBlocked: boolean, reason: string) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[History Guard] ${isBlocked ? 'BLOCKED' : 'ALLOWED'} pushState:`, {
-        url,
-        reason,
-        historyLength: window.history.length,
-        currentUrl: window.location.href,
-      });
+    const message = `[History Guard] ${isBlocked ? 'BLOCKED' : 'ALLOWED'} pushState: ${url}`;
+    const details = {
+      url,
+      reason,
+      historyLength: window.history.length,
+      currentUrl: window.location.href,
+      timestamp: new Date().toISOString(),
+    };
+    
+    if (isBlocked) {
+      // Always log blocked calls (important for debugging)
+      console.warn(message, details);
+    } else if (process.env.NODE_ENV === 'development') {
+      // Only log allowed calls in development (to reduce noise)
+      console.log(message, details);
     }
   };
 }

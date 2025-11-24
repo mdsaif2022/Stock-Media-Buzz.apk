@@ -38,6 +38,7 @@ import "@/utils/debugBackButton"; // Initialize back button debug utility
 import "@/utils/checkHistoryEntries"; // Initialize history entries checker
 import "@/utils/clearDuplicateHistory"; // Initialize clear duplicate history utility
 import "@/utils/forceRefreshHistory"; // Initialize force refresh history utility
+import "@/utils/showHistoryGuardLogs"; // Initialize show history guard logs utility
 
 const queryClient = new QueryClient({
   defaultOptions: {
