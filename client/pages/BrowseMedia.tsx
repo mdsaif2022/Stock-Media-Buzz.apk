@@ -75,8 +75,9 @@ export default function BrowseMedia() {
     if (isBackNav) {
       // On browser navigation, mark the time and prevent redirects
       lastBackNavTimeRef.current = Date.now();
-      // Don't reset hasSyncedRef - keep it true to prevent syncing
-      // But allow it to be checked again on next navigation
+      // Reset hasSyncedRef to false so it can be checked again on next navigation
+      // This allows the component to work correctly on subsequent back navigations
+      hasSyncedRef.current = false;
       
       if (process.env.NODE_ENV === 'development') {
         console.log('[BrowseMedia] ✅ Back navigation detected - BLOCKING all redirects', {
@@ -86,16 +87,17 @@ export default function BrowseMedia() {
           isBackNavigationActive: isBackNavigationActive(),
           categoryParam,
           activeCategory,
-          timeSinceLastBack: Date.now() - lastBackNavTimeRef.current
+          timestamp: new Date().toISOString()
         });
       }
       return; // CRITICAL: Exit early, don't do ANY URL syncing
     }
     
-    // If we recently had back navigation (within last 2 seconds), don't sync
+    // If we recently had back navigation (within last 1 second), don't sync
     // This prevents redirects immediately after back navigation completes
+    // Reduced to 1 second to allow faster subsequent back clicks
     const timeSinceLastBack = Date.now() - lastBackNavTimeRef.current;
-    if (timeSinceLastBack < 2000) {
+    if (timeSinceLastBack < 1000) {
       if (process.env.NODE_ENV === 'development') {
         console.log('[BrowseMedia] ⏳ Recent back nav detected - skipping sync', {
           timeSinceLastBack: timeSinceLastBack + 'ms'

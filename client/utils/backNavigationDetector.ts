@@ -27,14 +27,25 @@ export function setupBackNavigationDetector() {
     isBackNavigation = true;
     backNavigationStartTime = Date.now();
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[BackNavDetector] 🔙 PopState detected - setting back nav flag', {
+        timestamp: new Date().toISOString(),
+        historyLength: window.history.length
+      });
+    }
+
     // Reset flag after navigation completes (React Router processes it)
     // Use a longer timeout to ensure React Router has time to handle it
     // Also ensure it stays active long enough for useEffect hooks to check it
+    // Increased to 2 seconds to handle multiple rapid back clicks
     backNavigationTimeout = setTimeout(() => {
       isBackNavigation = false;
       backNavigationTimeout = null;
       backNavigationStartTime = 0;
-    }, 1000); // Increased to 1000ms to ensure all useEffect hooks can detect it
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[BackNavDetector] ✅ Back nav flag reset');
+      }
+    }, 2000); // Increased to 2 seconds to handle multiple back clicks
   };
 
   // Listen for popstate events (browser back/forward button)
@@ -56,11 +67,18 @@ export function setupBackNavigationDetector() {
  * This is more reliable than useNavigationType which can have timing issues
  */
 export function isBackNavigationActive(): boolean {
-  // Check if flag is set AND it's been less than 1 second since popstate
+  // Check if flag is set AND it's been less than 2 seconds since popstate
   // This ensures we catch back navigation even if there's a delay
+  // Increased to 2 seconds to handle multiple rapid back clicks
   if (isBackNavigation) {
     const timeSincePopState = Date.now() - backNavigationStartTime;
-    return timeSincePopState < 1000; // Active for 1 second after popstate
+    const isActive = timeSincePopState < 2000; // Active for 2 seconds after popstate
+    if (process.env.NODE_ENV === 'development' && isActive) {
+      console.log('[BackNavDetector] ✅ Back nav active', {
+        timeSincePopState: timeSincePopState + 'ms'
+      });
+    }
+    return isActive;
   }
   return false;
 }
