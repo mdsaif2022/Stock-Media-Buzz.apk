@@ -66,11 +66,11 @@ function normalizeUrl(url: string | URL | null | undefined, baseUrl: string = wi
  */
 export function setProgrammaticNavigation(value: boolean): void {
   isProgrammaticNavigation = value;
-  // Auto-reset after short delay
+  // Auto-reset after longer delay to catch async React Router navigation
   if (value) {
     setTimeout(() => {
       isProgrammaticNavigation = false;
-    }, 100);
+    }, 500); // Increased from 100ms to 500ms to catch React Router's async navigation
   }
 }
 
@@ -116,13 +116,22 @@ export function setupHistoryGuard() {
     // EXTREMELY STRICT: Only block if:
     // 1. It's the EXACT same URL as current (including query/hash)
     // 2. AND it's the same as the last pushed URL
-    // 3. AND it happened within 10ms (extremely rapid - definitely spam, not user action)
+    // 3. AND it happened within 5ms (extremely rapid - definitely spam, not user action)
+    // 4. AND the URL is NOT different (if URL is different, it's legitimate navigation)
     // This is so strict that it will NEVER block legitimate React Router navigation
     const isExtremelyRapidDuplicate = 
       newUrlKey === currentUrlKey && 
-      lastPushedUrl === newUrlKey && 
-      timeSinceLastPush < 10; // Only catch obvious spam (< 10ms)
+      newUrlKey === lastPushedUrl && 
+      timeSinceLastPush < 5; // Only catch obvious spam (< 5ms - even stricter)
     
+    // NEVER block if URL is different - that's always legitimate navigation
+    if (newUrlKey !== currentUrlKey) {
+      // URL is different - this is legitimate navigation, always allow
+      lastPushedUrl = newUrlKey;
+      return originalPushState.call(window.history, state, title, url);
+    }
+    
+    // Only block if it's the exact same URL AND extremely rapid (spam)
     if (isExtremelyRapidDuplicate) {
       // This is definitely spam - use replaceState instead
       console.warn('[History Guard] Blocking extremely rapid duplicate:', newUrlKey, {
