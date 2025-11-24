@@ -207,6 +207,28 @@ export function getHistoryState() {
     urlKey: getUrlKey(),
     historyLength: window.history.length,
     lastTrackedUrl: lastUrl,
+    isGuardEnabled: isHistoryGuardEnabled,
   };
+}
+
+/**
+ * Enable or disable the history guard (for testing)
+ */
+export function setHistoryGuardEnabled(enabled: boolean): void {
+  isHistoryGuardEnabled = enabled;
+  console.log(`[History Guard] ${enabled ? 'Enabled' : 'Disabled'}`);
+}
+
+// Make available globally for testing
+if (typeof window !== 'undefined') {
+  (window as any).disableHistoryGuard = () => setHistoryGuardEnabled(false);
+  (window as any).enableHistoryGuard = () => setHistoryGuardEnabled(true);
+  (window as any).toggleHistoryGuard = () => {
+    setHistoryGuardEnabled(!isHistoryGuardEnabled);
+  };
+  console.log('💡 History Guard controls available:');
+  console.log('   - window.disableHistoryGuard() - Disable guard');
+  console.log('   - window.enableHistoryGuard() - Enable guard');
+  console.log('   - window.toggleHistoryGuard() - Toggle guard');
 }
 
