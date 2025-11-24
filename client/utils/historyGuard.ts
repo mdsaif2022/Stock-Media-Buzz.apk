@@ -114,19 +114,26 @@ export function setupHistoryGuard() {
     }
     
     // URL is the SAME as current - this creates a duplicate entry
-    // Block it UNLESS it's programmatic navigation from React Router
-    // (React Router might push same URL with different state, which is OK)
-    if (isProgrammaticNavigation) {
-      // React Router navigation - allow it (might be updating state)
+    // Check if this is from React Router by examining the call stack
+    // React Router's BrowserRouter uses history.pushState internally
+    const stack = new Error().stack || '';
+    const isReactRouterCall = stack.includes('BrowserRouter') || 
+                              stack.includes('react-router') ||
+                              stack.includes('Router') ||
+                              isProgrammaticNavigation;
+    
+    if (isReactRouterCall) {
+      // React Router navigation - allow it (might be updating state or handling navigation)
       lastPushedUrl = newUrlKey;
       return originalPushState.call(window.history, state, title, url);
     }
     
-    // Same URL AND not programmatic navigation - this is a duplicate!
+    // Same URL AND not from React Router - this is likely a duplicate from ad scripts or other code
     // Use replaceState instead to avoid creating duplicate history entry
     console.warn('[History Guard] Blocking duplicate pushState (same URL):', newUrlKey, {
       timeSinceLastPush,
       isProgrammaticNavigation,
+      stack: stack.split('\n').slice(0, 5).join('\n'), // Log first 5 stack frames for debugging
     });
     return originalReplaceState.call(window.history, state, title, url);
   };
