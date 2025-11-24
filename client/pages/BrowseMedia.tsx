@@ -43,6 +43,7 @@ export default function BrowseMedia() {
   // This prevents creating excessive history entries
   // CRITICAL: Never sync on browser back/forward navigation (POP)
   const hasSyncedRef = useRef(false);
+  const isProcessingBackNavRef = useRef(false);
   
   useEffect(() => {
     // CRITICAL: Don't sync URL if this is browser back/forward navigation
@@ -58,7 +59,9 @@ export default function BrowseMedia() {
       currentPath.length < prevPath.length ||
       (prevPath.startsWith('/browse/') && currentPath === '/browse') ||
       (prevPath.startsWith('/browse/') && currentPath.startsWith('/browse/') && 
-       prevPath.split('/').length > currentPath.split('/').length);
+       prevPath.split('/').filter(Boolean).length > currentPath.split('/').filter(Boolean).length) ||
+      // Detect going from detail page back to category page
+      (prevPath.match(/\/browse\/[^/]+\/[^/]+$/) && currentPath.match(/\/browse\/[^/]+$/));
     
     // Check BEFORE updating
     const wasBackNav = isBrowserNavigation || isPathGoingBack;
@@ -70,8 +73,28 @@ export default function BrowseMedia() {
     const isBackNav = wasBackNav;
     
     if (isBackNav) {
-      // On browser navigation, just mark as synced to prevent any redirects
+      // On browser navigation, set processing flag and mark as synced to prevent any redirects
+      isProcessingBackNavRef.current = true;
       hasSyncedRef.current = true;
+      
+      // Reset processing flag after a delay
+      setTimeout(() => {
+        isProcessingBackNavRef.current = false;
+      }, 2000);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[BrowseMedia] Back navigation detected - BLOCKING all redirects', {
+          currentPath,
+          prevPath,
+          navigationType,
+          isBackNavigationActive: isBackNavigationActive()
+        });
+      }
+      return;
+    }
+    
+    // If we're still processing back nav, don't sync
+    if (isProcessingBackNavRef.current) {
       return;
     }
     
