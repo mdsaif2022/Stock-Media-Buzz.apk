@@ -77,24 +77,29 @@ export default function BrowseMedia() {
       isProcessingBackNavRef.current = true;
       hasSyncedRef.current = true;
       
-      // Reset processing flag after a delay
+      // Reset processing flag after a delay (longer to ensure all effects complete)
       setTimeout(() => {
         isProcessingBackNavRef.current = false;
-      }, 2000);
+      }, 3000); // Increased to 3 seconds
       
       if (process.env.NODE_ENV === 'development') {
-        console.log('[BrowseMedia] Back navigation detected - BLOCKING all redirects', {
+        console.log('[BrowseMedia] ✅ Back navigation detected - BLOCKING all redirects', {
           currentPath,
           prevPath,
           navigationType,
-          isBackNavigationActive: isBackNavigationActive()
+          isBackNavigationActive: isBackNavigationActive(),
+          categoryParam,
+          activeCategory
         });
       }
-      return;
+      return; // CRITICAL: Exit early, don't do ANY URL syncing
     }
     
     // If we're still processing back nav, don't sync
     if (isProcessingBackNavRef.current) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[BrowseMedia] ⏳ Still processing back nav - skipping sync');
+      }
       return;
     }
     
