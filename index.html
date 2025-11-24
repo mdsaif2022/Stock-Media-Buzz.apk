@@ -149,11 +149,38 @@
               console.error('[Early Guard] ❌ History is POLLUTED:', length, 'entries');
               console.error('[Early Guard] This prevents the back button from working');
               console.error('[Early Guard]');
-              console.error('[Early Guard] 🔧 SOLUTION: Close ALL tabs and open a fresh one');
+              console.error('[Early Guard] 🔧 STEP-BY-STEP SOLUTION:');
+              console.error('[Early Guard]   1. Close THIS tab completely (Ctrl+W or click X)');
+              console.error('[Early Guard]   2. Close ALL other tabs of localhost:8080');
+              console.error('[Early Guard]   3. Wait 2 seconds');
+              console.error('[Early Guard]   4. Open a NEW tab (Ctrl+T)');
+              console.error('[Early Guard]   5. Type: http://localhost:8080/');
+              console.error('[Early Guard]   6. Press Enter');
+              console.error('[Early Guard]');
+              console.error('[Early Guard] 💡 ALTERNATIVE: Use Incognito Mode (Ctrl+Shift+N)');
+              console.error('[Early Guard]   This guarantees clean history');
               return true;
             } else {
               console.log('[Early Guard] ✅ History is clean:', length, 'entries');
+              console.log('[Early Guard] The back button should work properly now!');
               return false;
+            }
+          };
+          
+          // Expose a function to force clear (can't actually clear, but provides instructions)
+          window.clearPollutedHistory = function() {
+            const length = window.history.length;
+            if (length > 10) {
+              console.warn('[Early Guard] ⚠️ Cannot programmatically clear history (browser security)');
+              console.warn('[Early Guard] History length:', length);
+              console.warn('[Early Guard]');
+              console.warn('[Early Guard] You MUST manually close all tabs and open a fresh one');
+              console.warn('[Early Guard]');
+              console.warn('[Early Guard] Quick fix: Press Ctrl+Shift+N (incognito) and navigate to the site');
+              return false;
+            } else {
+              console.log('[Early Guard] ✅ History is already clean!');
+              return true;
             }
           };
           console.log('[Early Guard] 💡 Use window.checkEarlyGuard() to check guard state');
