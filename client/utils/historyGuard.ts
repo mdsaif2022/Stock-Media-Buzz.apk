@@ -95,11 +95,21 @@ export function setupHistoryGuard() {
     timestamp: new Date().toISOString(),
   });
   
-  // If history length is already high, warn about it
+  // If history length is already high, it means duplicates exist
+  // Try to clear them by replacing current entry
   if (initialLength > 10) {
     console.warn('[History Guard] WARNING: History length is already', initialLength, 'on setup!');
     console.warn('[History Guard] This suggests duplicates were created before guard was set up');
-    console.warn('[History Guard] Solution: Refresh the page to clear history');
+    console.warn('[History Guard] Attempting to clear duplicate history...');
+    
+    // Try to clear history by replacing current entry
+    // This won't remove existing entries, but will prevent new duplicates
+    const currentUrl = window.location.href;
+    window.history.replaceState(null, '', currentUrl);
+    
+    console.warn('[History Guard] Note: Cannot remove existing history entries');
+    console.warn('[History Guard] Guard will prevent NEW duplicates from being created');
+    console.warn('[History Guard] For a clean start, do a hard refresh (Ctrl+Shift+R or Cmd+Shift+R)');
   }
 
   // Store original methods

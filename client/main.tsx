@@ -24,14 +24,16 @@ const loadAdsterraScript = () => {
 
 // Load Adsterra on app start (non-blocking)
 if (typeof window !== "undefined") {
-  // Setup history guard FIRST (before anything else) to prevent duplicate URL entries
+  // CRITICAL: Setup history guard FIRST (before anything else) to prevent duplicate URL entries
   // This must run before React Router or any other code that might use history API
+  // Set it up immediately, even before other initialization
   setupHistoryGuard();
   
-  // Log initial state
+  // Log initial state AFTER guard is set up
   console.log('[Main] Initial history state:', {
     length: window.history.length,
     url: window.location.href,
+    note: 'If length > 10, duplicates exist from before guard setup',
   });
   
   // Setup back navigation detector to reliably detect browser back/forward
