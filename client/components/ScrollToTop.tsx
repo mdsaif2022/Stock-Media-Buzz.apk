@@ -11,6 +11,7 @@ export default function ScrollToTop() {
   const prevPathname = useRef(pathname);
   const isNavigatingBackRef = useRef(false);
 
+  // Set up popstate listener outside useEffect to catch events before React Router processes them
   useEffect(() => {
     // Detect if this is a back/forward navigation by checking if popstate was fired
     // This helps ensure proper behavior on mobile browsers
@@ -19,43 +20,51 @@ export default function ScrollToTop() {
       // Reset flag after a short delay
       setTimeout(() => {
         isNavigatingBackRef.current = false;
-      }, 100);
+      }, 200);
     };
 
-    window.addEventListener('popstate', handlePopState);
+    // Use capture phase to set flag before React Router handles the event
+    window.addEventListener('popstate', handlePopState, true);
 
+    return () => {
+      window.removeEventListener('popstate', handlePopState, true);
+    };
+  }, []); // Only set up listener once
+
+  useEffect(() => {
     // Only scroll if pathname actually changed (not just a re-render)
     if (prevPathname.current !== pathname) {
       prevPathname.current = pathname;
 
-      if (hash) {
-        // Small delay to ensure DOM is ready, especially on mobile
-        const delay = isNavigatingBackRef.current ? 150 : 0;
-        setTimeout(() => {
-          const targetId = hash.replace("#", "");
-          const element = document.getElementById(targetId);
-          if (element) {
-            element.scrollIntoView({ behavior: "smooth", block: "start" });
-            return;
-          }
-        }, delay);
-      } else {
-        // Scroll to top
-        // Use a small delay on mobile to ensure layout is complete
-        const delay = isNavigatingBackRef.current ? 50 : 0;
-        setTimeout(() => {
-          window.scrollTo({
-            top: 0,
-            left: 0,
-            behavior: "instant" in window ? ("instant" as ScrollBehavior) : "auto",
-          });
-        }, delay);
-      }
-    }
+      // Check flag asynchronously to ensure it's been set by popstate handler
+      // Use a microtask to check after popstate event has been processed
+      Promise.resolve().then(() => {
+        const isBackNavigation = isNavigatingBackRef.current;
+        const delay = isBackNavigation ? (hash ? 150 : 50) : 0;
 
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
+        if (hash) {
+          // Small delay to ensure DOM is ready, especially on mobile
+          setTimeout(() => {
+            const targetId = hash.replace("#", "");
+            const element = document.getElementById(targetId);
+            if (element) {
+              element.scrollIntoView({ behavior: "smooth", block: "start" });
+              return;
+            }
+          }, delay);
+        } else {
+          // Scroll to top
+          // Use a small delay on mobile to ensure layout is complete
+          setTimeout(() => {
+            window.scrollTo({
+              top: 0,
+              left: 0,
+              behavior: "instant" in window ? ("instant" as ScrollBehavior) : "auto",
+            });
+          }, delay);
+        }
+      });
+    }
   }, [pathname, hash]);
 
   return null;

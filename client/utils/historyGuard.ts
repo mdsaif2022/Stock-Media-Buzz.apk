@@ -9,8 +9,6 @@
 
 let lastUrl: string | null = null;
 let isGuarding = false;
-let lastPushStateTime = 0;
-let consecutiveSameUrlCount = 0;
 
 /**
  * Get a unique identifier for the current URL
@@ -21,19 +19,25 @@ function getUrlKey(): string {
 
 /**
  * Normalize URL for comparison (handles relative/absolute URLs)
+ * Always returns pathname+search+hash format for consistent comparison
  */
 function normalizeUrl(url: string | URL | null | undefined, baseUrl: string = window.location.origin): string {
-  if (!url) return window.location.href;
+  // If url is null/undefined, use current location but normalize to pathname+search+hash format
+  if (!url) {
+    return getUrlKey(); // Use getUrlKey() for consistency
+  }
   
   const urlString = String(url);
   
-  // If it's already a full URL, return it
+  // If it's already a full URL, extract pathname+search+hash
   if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
     try {
       const urlObj = new URL(urlString);
       return `${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
     } catch {
-      return urlString;
+      // If URL parsing fails, try to extract pathname manually
+      const match = urlString.match(/^https?:\/\/[^/]+(\/.*)$/);
+      return match ? match[1] : urlString;
     }
   }
   
@@ -42,27 +46,16 @@ function normalizeUrl(url: string | URL | null | undefined, baseUrl: string = wi
     const urlObj = new URL(urlString, baseUrl);
     return `${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
   } catch {
-    return urlString;
+    // If URL parsing fails, treat as relative path
+    // Remove leading slash if present to handle both /path and path
+    const cleanPath = urlString.startsWith('/') ? urlString : `/${urlString}`;
+    return cleanPath;
   }
-}
-
-/**
- * Check if URL actually changed
- */
-function hasUrlChanged(): boolean {
-  const currentUrl = getUrlKey();
-  if (lastUrl === null) {
-    lastUrl = currentUrl;
-    return true; // First load
-  }
-  const changed = lastUrl !== currentUrl;
-  lastUrl = currentUrl;
-  return changed;
 }
 
 /**
  * Monitor history API to detect duplicate entries
- * Mobile-optimized version that doesn't interfere with React Router
+ * Very conservative - only blocks obvious spam, never interferes with React Router
  */
 export function setupHistoryGuard() {
   if (typeof window === 'undefined' || isGuarding) {
@@ -74,93 +67,58 @@ export function setupHistoryGuard() {
 
   // Store original methods
   const originalPushState = window.history.pushState;
-  const originalReplaceState = window.history.replaceState;
 
   // Track the last URL that was pushed (not replaced)
   let lastPushedUrl: string | null = null;
+  let lastPushStateCallTime = 0;
 
   // Override pushState to prevent duplicate entries
-  // Only intercept if it's clearly a duplicate from a third-party script
+  // VERY CONSERVATIVE: Only block if it's the EXACT same URL pushed multiple times in rapid succession (< 50ms)
+  // This catches ad scripts but never interferes with legitimate navigation
   window.history.pushState = function(state: any, title: string, url?: string | URL | null) {
     const now = Date.now();
-    const timeSinceLastPush = now - lastPushStateTime;
-    lastPushStateTime = now;
+    const timeSinceLastPush = now - lastPushStateCallTime;
+    lastPushStateCallTime = now;
 
     // Normalize URLs for comparison
     const currentUrlKey = getUrlKey();
     const newUrlKey = normalizeUrl(url);
     
-    // Check if this is the exact same URL as current (including query/hash)
-    const isExactDuplicate = newUrlKey === currentUrlKey;
+    // VERY STRICT: Only block if:
+    // 1. It's the EXACT same URL as current (including query/hash)
+    // 2. AND it's the same as the last pushed URL
+    // 3. AND it happened within 50ms (very rapid - definitely spam)
+    // This ensures we NEVER block legitimate React Router navigation
+    const isRapidExactDuplicate = 
+      newUrlKey === currentUrlKey && 
+      lastPushedUrl === newUrlKey && 
+      timeSinceLastPush < 50;
     
-    // Check if this is the same as the last pushed URL (rapid duplicate pushes)
-    const isRapidDuplicate = lastPushedUrl === newUrlKey && timeSinceLastPush < 100;
-    
-    // Only prevent if:
-    // 1. It's an exact duplicate of current URL AND
-    // 2. It happened very quickly (likely from ad scripts) OR
-    // 3. We've seen multiple consecutive duplicates
-    if (isExactDuplicate) {
-      consecutiveSameUrlCount++;
-      
-      // If we see multiple rapid duplicates, it's likely ad scripts
-      // Only convert to replaceState if it's clearly spam
-      if (isRapidDuplicate || consecutiveSameUrlCount > 2) {
-        console.warn('[History Guard] Preventing duplicate history entry:', newUrlKey);
-        consecutiveSameUrlCount = 0; // Reset counter
-        // Use replaceState instead to avoid duplicate entry
-        return originalReplaceState.call(window.history, state, title, url);
-      }
-    } else {
-      // URL changed, reset counter
-      consecutiveSameUrlCount = 0;
-      lastPushedUrl = newUrlKey;
+    if (isRapidExactDuplicate) {
+      // This is definitely spam - use replaceState instead
+      console.warn('[History Guard] Blocking rapid duplicate:', newUrlKey);
+      return window.history.replaceState(state, title, url);
     }
     
-    // URL is different or legitimate navigation - allow pushState
+    // Update tracking for next comparison
+    lastPushedUrl = newUrlKey;
+    
+    // Allow all other pushState calls (including React Router navigation)
     return originalPushState.call(window.history, state, title, url);
   };
 
-  // Monitor popstate events to track URL changes (for mobile browser back button)
-  // Use capture phase to ensure we track before React Router handles it
-  window.addEventListener('popstate', (event) => {
+  // Monitor popstate events ONLY for tracking (don't interfere with React Router)
+  // Use bubble phase so React Router handles it first
+  window.addEventListener('popstate', () => {
     const newUrl = getUrlKey();
     if (lastUrl !== newUrl) {
       lastUrl = newUrl;
       lastPushedUrl = null; // Reset on navigation
-      consecutiveSameUrlCount = 0; // Reset counter
+      lastPushStateCallTime = 0; // Reset timing
     }
-  }, true); // Use capture phase
+  }); // Use default bubble phase - let React Router handle it first
 
-  // Monitor location changes (for mobile browsers that might not fire popstate correctly)
-  let lastLocation = window.location.href;
-  let locationCheckInterval: ReturnType<typeof setInterval> | null = null;
-  
-  const checkLocation = () => {
-    const currentLocation = window.location.href;
-    if (currentLocation !== lastLocation) {
-      const newUrl = getUrlKey();
-      if (lastUrl !== newUrl) {
-        lastUrl = newUrl;
-        lastPushedUrl = null; // Reset on navigation
-        consecutiveSameUrlCount = 0; // Reset counter
-      }
-      lastLocation = currentLocation;
-    }
-  };
-
-  // Check location periodically (fallback for mobile browsers)
-  // Use a longer interval to avoid performance issues
-  locationCheckInterval = setInterval(checkLocation, 500);
-
-  // Clean up on page unload
-  window.addEventListener('beforeunload', () => {
-    if (locationCheckInterval) {
-      clearInterval(locationCheckInterval);
-    }
-  });
-
-  console.log('[History Guard] Active - preventing duplicate history entries (mobile-optimized)');
+  console.log('[History Guard] Active - very conservative mode (mobile-optimized)');
 }
 
 /**
