@@ -52,7 +52,7 @@
         let lastPushTime = 0;
         let pushStateCallCount = 0;
         
-        // Override pushState to block rapid same-URL duplicates
+        // Override pushState to block ALL same-URL duplicates (very aggressive)
         window.history.pushState = function(state, title, url) {
           pushStateCallCount++;
           const now = Date.now();
@@ -78,20 +78,36 @@
             }
           }
           
-          // Allow different URLs
+          // Log EVERY pushState call to see what's creating duplicates
+          const stack = new Error().stack || '';
+          const isReactRouter = stack.includes('BrowserRouter') || 
+                               stack.includes('react-router') || 
+                               stack.includes('Router') ||
+                               (state && typeof state === 'object' && ('key' in state || 'usr' in state));
+          
+          console.log('[Early Guard] pushState call #' + pushStateCallCount, {
+            newUrl: newUrl,
+            currentUrl: currentUrl,
+            isSameUrl: newUrl === currentUrl,
+            isReactRouter: isReactRouter,
+            timeSinceLastPush: timeSinceLastPush + 'ms',
+            historyLength: window.history.length,
+            stack: stack.split('\n').slice(1, 4).join('\n') // First 3 stack frames
+          });
+          
+          // Allow different URLs (legitimate navigation)
           if (newUrl !== currentUrl) {
             lastUrl = newUrl;
+            console.log('[Early Guard] ✅ ALLOWED - Different URL');
             return originalPushState.call(window.history, state, title, url);
           }
           
-          // Block rapid same-URL pushState (< 10ms = spam)
-          if (timeSinceLastPush < 10) {
-            console.warn('[Early Guard] Blocking rapid duplicate (#', pushStateCallCount, '):', newUrl);
-            return window.history.replaceState(state, title, url);
-          }
-          
-          lastUrl = newUrl;
-          return originalPushState.call(window.history, state, title, url);
+          // SAME URL - This creates a duplicate entry!
+          // Block ALL same-URL pushState calls (not just rapid ones)
+          // React Router should NEVER push the same URL - that's a bug
+          console.warn('[Early Guard] ❌ BLOCKING duplicate (#', pushStateCallCount, ') - Same URL:', newUrl);
+          console.warn('[Early Guard] Using replaceState instead to prevent duplicate history entry');
+          return window.history.replaceState(state, title, url);
         };
         
         console.log('[Early History Guard] Active (inline script)');
