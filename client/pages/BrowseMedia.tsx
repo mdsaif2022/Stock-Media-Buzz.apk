@@ -43,7 +43,7 @@ export default function BrowseMedia() {
   // This prevents creating excessive history entries
   // CRITICAL: Never sync on browser back/forward navigation (POP)
   const hasSyncedRef = useRef(false);
-  const isProcessingBackNavRef = useRef(false);
+  const lastBackNavTimeRef = useRef(0);
   
   useEffect(() => {
     // CRITICAL: Don't sync URL if this is browser back/forward navigation
@@ -73,14 +73,10 @@ export default function BrowseMedia() {
     const isBackNav = wasBackNav;
     
     if (isBackNav) {
-      // On browser navigation, set processing flag and mark as synced to prevent any redirects
-      isProcessingBackNavRef.current = true;
-      hasSyncedRef.current = true;
-      
-      // Reset processing flag after a delay (longer to ensure all effects complete)
-      setTimeout(() => {
-        isProcessingBackNavRef.current = false;
-      }, 3000); // Increased to 3 seconds
+      // On browser navigation, mark the time and prevent redirects
+      lastBackNavTimeRef.current = Date.now();
+      // Don't reset hasSyncedRef - keep it true to prevent syncing
+      // But allow it to be checked again on next navigation
       
       if (process.env.NODE_ENV === 'development') {
         console.log('[BrowseMedia] ✅ Back navigation detected - BLOCKING all redirects', {
@@ -89,16 +85,21 @@ export default function BrowseMedia() {
           navigationType,
           isBackNavigationActive: isBackNavigationActive(),
           categoryParam,
-          activeCategory
+          activeCategory,
+          timeSinceLastBack: Date.now() - lastBackNavTimeRef.current
         });
       }
       return; // CRITICAL: Exit early, don't do ANY URL syncing
     }
     
-    // If we're still processing back nav, don't sync
-    if (isProcessingBackNavRef.current) {
+    // If we recently had back navigation (within last 2 seconds), don't sync
+    // This prevents redirects immediately after back navigation completes
+    const timeSinceLastBack = Date.now() - lastBackNavTimeRef.current;
+    if (timeSinceLastBack < 2000) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('[BrowseMedia] ⏳ Still processing back nav - skipping sync');
+        console.log('[BrowseMedia] ⏳ Recent back nav detected - skipping sync', {
+          timeSinceLastBack: timeSinceLastBack + 'ms'
+        });
       }
       return;
     }
