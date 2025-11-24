@@ -275,7 +275,7 @@ export default function Index() {
               return (
                 <Link
                   key={category.id}
-                  to={`/browse?category=${category.name === "Images" ? "image" : category.name.toLowerCase()}`}
+                  to={`/browse/${category.name === "Images" ? "image" : category.name.toLowerCase()}`}
                   className="group animate-slide-up touch-manipulation"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
@@ -326,9 +326,11 @@ export default function Index() {
                     : media.downloads.toString();
                 const isVideoCard = media.category?.toLowerCase() === "video" && Boolean(media.fileUrl);
 
+                const categoryPath = media.category?.toLowerCase() || "all";
+                
                 if (isVideoCard) {
                   return (
-                    <VideoCard key={media.id} media={media} to={`/media/${media.id}`} variant="compact" className="h-full" />
+                    <VideoCard key={media.id} media={media} to={`/browse/${categoryPath}/${media.id}`} variant="compact" className="h-full" />
                   );
                 }
 
@@ -344,7 +346,7 @@ export default function Index() {
                 return (
                   <Link
                     key={media.id}
-                    to={`/media/${media.id}`}
+                    to={`/browse/${categoryPath}/${media.id}`}
                     className="group cursor-pointer touch-manipulation active:scale-[0.98] transition-transform"
                   >
                     <div className="relative overflow-hidden rounded-lg shadow-sm group-hover:shadow-md transition-shadow">
@@ -410,6 +412,7 @@ export default function Index() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {fallbackTrendingMedia.map((media) => {
+                const categoryPath = media.category?.toLowerCase() || "all";
                 const getIcon = (category: string) => {
                   const categoryLower = category.toLowerCase();
                   if (categoryLower === "video") return Play;
@@ -421,7 +424,7 @@ export default function Index() {
                 return (
                   <Link
                     key={media.id}
-                    to={`/media/${media.id}`}
+                    to={`/browse/${categoryPath}/${media.id}`}
                     className="group cursor-pointer touch-manipulation active:scale-[0.98] transition-transform"
                   >
                     <div className="relative overflow-hidden rounded-lg shadow-sm group-hover:shadow-md transition-shadow">

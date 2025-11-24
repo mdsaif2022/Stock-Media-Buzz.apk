@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -16,13 +16,14 @@ import Dashboard from "./pages/Dashboard";
 import CreatorDashboard from "./pages/CreatorDashboard";
 import Profile from "./pages/Profile";
 import MediaDetail from "./pages/MediaDetail";
+import NavigationDemo from "./pages/NavigationDemo";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminMedia from "./pages/admin/Media";
 import AdminAds from "./pages/admin/Ads";
 import AdminAnalytics from "./pages/admin/Analytics";
 import AdminUsers from "./pages/admin/Users";
 import AdminSettings from "./pages/admin/Settings";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { ADMIN_BASE_PATH } from "./constants/routes";
 import { apiFetch } from "@/lib/api";
 import ScrollToTop from "@/components/ScrollToTop";
@@ -37,39 +38,14 @@ const queryClient = new QueryClient({
 });
 
 function AppRoutes() {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  // Handle browser back/forward button navigation
-  // Ensure React Router updates when browser history changes
-  useEffect(() => {
-    const handlePopState = (event: PopStateEvent) => {
-      // Get the current browser URL
-      const targetPath = window.location.pathname + window.location.search + window.location.hash;
-      const currentRouterPath = location.pathname + location.search + (location.hash || '');
-      
-      // If the browser URL doesn't match React Router's current location, sync them
-      // This ensures the page updates when back/forward buttons are clicked
-      if (targetPath !== currentRouterPath) {
-        // Navigate to match the browser URL (this will update React Router's location)
-        navigate(targetPath, { replace: false });
-      }
-    };
-
-    // Listen for browser back/forward button clicks
-    window.addEventListener("popstate", handlePopState);
-    
-    return () => {
-      window.removeEventListener("popstate", handlePopState);
-    };
-  }, [navigate, location]);
-
   return (
     <>
       <ScrollToTop />
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/browse" element={<BrowseMedia />} />
+        <Route path="/browse/:category" element={<BrowseMedia />} />
+        <Route path="/browse/:category/:id" element={<MediaDetail />} />
         <Route path="/categories" element={<Categories />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/login" element={<Login />} />
@@ -77,6 +53,8 @@ function AppRoutes() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/creator" element={<CreatorDashboard />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/navigation-demo" element={<NavigationDemo />} />
+        {/* Legacy route support - redirect to new structure */}
         <Route path="/media/:id" element={<MediaDetail />} />
 
         {/* Admin Routes */}

@@ -1,7 +1,7 @@
 import Layout from "@/components/Layout";
 import { Download, Share2, Heart, Clock, Eye, Tag, AlertCircle, Play, Image as ImageIcon, Music, Zap, Check, Smartphone } from "lucide-react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Media, MediaResponse } from "@shared/api";
 import { apiFetch, API_BASE_URL } from "@/lib/api";
 import { DownloadVideoViewer } from "@/components/media/DownloadVideoViewer";
@@ -10,7 +10,7 @@ import { AudioPlayer } from "@/components/media/AudioPlayer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export default function MediaDetail() {
-  const { id } = useParams<{ id: string }>();
+  const { category, id } = useParams<{ category?: string; id: string }>();
   const navigate = useNavigate();
   const [isFavorite, setIsFavorite] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -21,11 +21,24 @@ export default function MediaDetail() {
   const [isRelatedLoading, setIsRelatedLoading] = useState(false);
   const [activeScreenshot, setActiveScreenshot] = useState<{ title?: string; description?: string; url: string } | null>(null);
   const [downloadAttempts, setDownloadAttempts] = useState(0); // Track number of download button clicks
+  const downloadAttemptsRef = useRef(0); // Ref to track attempts synchronously (fixes rapid click bug)
+  const lastRedirectedIdRef = useRef<string | null>(null); // Track which ID we redirected for
+  const isNavigatingBackRef = useRef(false); // Track if we're in a back navigation
 
   // Fetch media data from API
   useEffect(() => {
     const fetchMedia = async () => {
       if (!id) return;
+      
+      // Reset redirect tracking when ID changes
+      if (lastRedirectedIdRef.current !== id) {
+        lastRedirectedIdRef.current = null;
+      }
+      
+      // Don't redirect if we're navigating back (category exists means we're on hierarchical URL)
+      // Only redirect from legacy routes when category is missing
+      const shouldRedirect = !category && !isNavigatingBackRef.current;
+      
       try {
         setIsLoading(true);
         const response = await apiFetch(`/api/media/${id}`);
@@ -34,21 +47,58 @@ export default function MediaDetail() {
           setMedia(data);
           // Reset download attempts when media changes
           setDownloadAttempts(0);
+          downloadAttemptsRef.current = 0;
+          
+          // If accessed via legacy route (/media/:id) without category, redirect to hierarchical URL
+          // Only redirect once per ID - check if we're on legacy route and have category data
+          // Also check if we haven't already redirected for this ID to prevent loops
+          // Don't redirect if we're navigating back
+          if (shouldRedirect && data.category && lastRedirectedIdRef.current !== id) {
+            const categoryPath = data.category.toLowerCase();
+            lastRedirectedIdRef.current = id;
+            // Use replace: true to avoid adding extra history entry for legacy route redirect
+            navigate(`/browse/${categoryPath}/${id}`, { replace: true });
+            return;
+          }
+          
+          // Reset navigation flag after successful load
+          isNavigatingBackRef.current = false;
         } else {
           // Use replace: true to avoid adding to history when media not found
-          navigate("/browse", { replace: true });
+          // Navigate back to category page if category exists, otherwise to browse
+          if (category) {
+            navigate(`/browse/${category}`, { replace: true });
+          } else {
+            navigate("/browse", { replace: true });
+          }
         }
       } catch (error) {
         console.error("Failed to fetch media:", error);
         // Use replace: true to avoid adding to history when error occurs
-        navigate("/browse", { replace: true });
+        // Navigate back to category page if category exists, otherwise to browse
+        if (category) {
+          navigate(`/browse/${category}`, { replace: true });
+        } else {
+          navigate("/browse", { replace: true });
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchMedia();
-  }, [id, navigate]);
+    // Only depend on id - category is part of the URL and will trigger re-render naturally
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+  
+  // Track when category changes (indicates back/forward navigation)
+  useEffect(() => {
+    // If category exists, we're on hierarchical URL - this is normal navigation
+    // If category was removed, we might be navigating back
+    if (category) {
+      isNavigatingBackRef.current = false;
+    }
+  }, [category]);
 
   useEffect(() => {
     if (!media) {
@@ -126,8 +176,10 @@ export default function MediaDetail() {
         "https://www.effectivegatecpm.com/pmapdftgc?key=39235e43e4d81ee4fe645e7c24b48b1b",
       ];
       
-      // Increment download attempts counter
-      const currentAttempt = downloadAttempts + 1;
+      // Increment download attempts counter using ref to avoid stale closure issues
+      // This ensures rapid clicks don't all see the same old value
+      downloadAttemptsRef.current += 1;
+      const currentAttempt = downloadAttemptsRef.current;
       setDownloadAttempts(currentAttempt);
       
       // First click: Always show ads
@@ -155,25 +207,41 @@ export default function MediaDetail() {
       link.style.display = 'none';
       document.body.appendChild(link);
       
-      // Function to trigger download
-      const triggerDownload = () => {
-        try {
-          // Click the link to trigger download
-          link.click();
-          
-          // Track download (this happens after file starts downloading)
-          apiFetch(`/api/download/${media.id}`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ mediaId: media.id }),
-          }).catch(console.error);
-          
-          setIsDownloading(false);
-          
-          // Clean up link after download starts
-          setTimeout(() => {
+      // Function to trigger download - returns a promise that resolves on success, rejects on failure
+      const triggerDownload = (): Promise<void> => {
+        return new Promise((resolve, reject) => {
+          try {
+            // Click the link to trigger download
+            link.click();
+            
+            // Track download (this happens after file starts downloading)
+            apiFetch(`/api/download/${media.id}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ mediaId: media.id }),
+            }).catch(console.error);
+            
+            setIsDownloading(false);
+            
+            // Clean up link after download starts
+            setTimeout(() => {
+              try {
+                if (document.body.contains(link)) {
+                  document.body.removeChild(link);
+                }
+              } catch {
+                // ignore cleanup errors
+              }
+            }, 2000);
+            
+            // Resolve on success (download initiated)
+            resolve();
+          } catch (downloadError) {
+            console.error("Download error:", downloadError);
+            setIsDownloading(false);
+            // Clean up on error
             try {
               if (document.body.contains(link)) {
                 document.body.removeChild(link);
@@ -181,20 +249,10 @@ export default function MediaDetail() {
             } catch {
               // ignore cleanup errors
             }
-          }, 2000);
-        } catch (downloadError) {
-          console.error("Download error:", downloadError);
-          setIsDownloading(false);
-          // Clean up on error
-          try {
-            if (document.body.contains(link)) {
-              document.body.removeChild(link);
-            }
-          } catch {
-            // ignore cleanup errors
+            // Reject on failure so caller knows download failed
+            reject(downloadError);
           }
-          alert("Failed to download. Please try again.");
-        }
+        });
       };
       
       if (shouldShowAds) {
@@ -207,39 +265,109 @@ export default function MediaDetail() {
         
         console.log(`Showing ${numAdsToShow} Adsteera ad(s) from ${adsterraLinks.length} total links`);
         
-        // Open all selected ads at once (while still in user gesture context)
+        // Open all selected ads synchronously within user gesture context
+        // This is required to avoid popup blockers - browsers block popups opened outside direct user interaction
         const adWindows: Window[] = [];
         
-        selectedAds.forEach((adUrl, index) => {
-          // Small delay between each ad window to avoid popup blockers
-          setTimeout(() => {
+        // Open all windows synchronously (within the same event handler)
+        // Note: Browsers may block some popups if too many are opened, but this is the only way
+        // to ensure they're not blocked due to being outside user gesture context
+        for (const adUrl of selectedAds) {
+          try {
             const adWindow = window.open(adUrl, "_blank", "width=800,height=600");
             if (adWindow) {
               adWindows.push(adWindow);
             }
-          }, index * 100); // 100ms delay between each ad
-        });
-        
-        // Don't auto-download after showing ads - user can close ads and click download again
-        // The ads are shown, user can close them, and next download click will be a new random decision
-        setIsDownloading(false);
-        
-        // Clean up link (we'll create a new one on next download attempt)
-        setTimeout(() => {
-          try {
-            if (document.body.contains(link)) {
-              document.body.removeChild(link);
-            }
-          } catch {
-            // ignore cleanup errors
+          } catch (error) {
+            // Some browsers may block popups, continue with others
+            console.warn("Failed to open ad window:", error);
           }
-        }, 1000);
+        }
+        
+        // Function to close ad windows
+        const closeAdWindows = () => {
+          adWindows.forEach((adWindow) => {
+            try {
+              if (adWindow && !adWindow.closed) {
+                adWindow.close();
+              }
+            } catch (error) {
+              // Ignore errors when closing windows (user may have already closed them)
+              console.warn("Error closing ad window:", error);
+            }
+          });
+        };
+        
+        // After showing ads, trigger download (except on first click where we only show ads)
+        // This ensures users get the file after seeing ads on subsequent attempts
+        if (isFirstClick) {
+          // First click: Only show ads, user must click again
+          setIsDownloading(false);
+          
+          // Close ad windows after a reasonable time (5 seconds) to prevent accumulation
+          setTimeout(() => {
+            closeAdWindows();
+          }, 5000);
+          
+          // Clean up link (we'll create a new one on next download attempt)
+          setTimeout(() => {
+            try {
+              if (document.body.contains(link)) {
+                document.body.removeChild(link);
+              }
+            } catch {
+              // ignore cleanup errors
+            }
+          }, 1000);
+        } else {
+          // Subsequent clicks: Show ads AND trigger download
+          // User sees ads, but download also starts
+          console.log(`Showing ads and triggering download (attempt ${currentAttempt})`);
+          
+          // Trigger download after a short delay to allow ads to open
+          setTimeout(() => {
+            triggerDownload()
+              .then(() => {
+                // Only reset attempts counter after successful download
+                setDownloadAttempts(0);
+                downloadAttemptsRef.current = 0;
+                
+                // Close ad windows after download starts successfully
+                setTimeout(() => {
+                  closeAdWindows();
+                }, 3000); // Give ads a few seconds to be seen, then close
+              })
+              .catch((error) => {
+                // Download failed - keep the current attempt count
+                console.error("Download failed, keeping attempt count:", error);
+                alert("Failed to download. Please try again.");
+                
+                // Close ad windows even on failure to prevent accumulation
+                setTimeout(() => {
+                  closeAdWindows();
+                }, 3000);
+                
+                // Don't reset downloadAttempts - user can retry with same attempt level
+              });
+          }, 500); // Small delay to let ads open first
+        }
       } else {
         // Download directly without showing ads
         console.log(`Downloading directly without ads (attempt ${currentAttempt})`);
-        triggerDownload();
-        // Reset attempts counter after successful download
-        setDownloadAttempts(0);
+        triggerDownload()
+          .then(() => {
+            // Only reset attempts counter after successful download
+            setDownloadAttempts(0);
+            downloadAttemptsRef.current = 0;
+          })
+          .catch((error) => {
+            // Download failed - keep the current attempt count
+            // User can retry without restarting the ad cycle
+            console.error("Download failed, keeping attempt count:", error);
+            alert("Failed to download. Please try again.");
+            // Don't reset downloadAttempts - user can retry with same attempt level
+            // Note: downloadAttemptsRef.current keeps the current value, so next click will continue from there
+          });
       }
     } catch (error) {
       console.error("Download error:", error);
@@ -251,7 +379,11 @@ export default function MediaDetail() {
   const handleShare = async () => {
     if (!media) return;
     
-    const shareUrl = `${window.location.origin}/media/${media.id}`;
+    // Use hierarchical URL if category is available, otherwise fallback to legacy
+    const categoryPath = category || media.category?.toLowerCase() || "all";
+    const shareUrl = category 
+      ? `${window.location.origin}/browse/${categoryPath}/${media.id}`
+      : `${window.location.origin}/media/${media.id}`;
     const shareData = {
       title: media.title,
       text: media.description,
@@ -356,15 +488,27 @@ export default function MediaDetail() {
           {/* Breadcrumb */}
           <div className="mb-4 sm:mb-6 md:mb-8">
             <nav className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
-              <a href="/" className="hover:text-primary transition-colors">
+              <Link to="/" className="hover:text-primary transition-colors">
                 Home
-              </a>
+              </Link>
               <span>/</span>
-              <a href="/browse" className="hover:text-primary transition-colors">
-                Browse
-              </a>
-              <span>/</span>
-              <span className="text-foreground truncate">{media.category}</span>
+              {category ? (
+                <>
+                  <Link to={`/browse/${category}`} className="hover:text-primary transition-colors">
+                    {media.category || category}
+                  </Link>
+                  <span>/</span>
+                  <span className="text-foreground truncate">{media.title}</span>
+                </>
+              ) : (
+                <>
+                  <Link to="/browse" className="hover:text-primary transition-colors">
+                    Browse
+                  </Link>
+                  <span>/</span>
+                  <span className="text-foreground truncate">{media.category}</span>
+                </>
+              )}
             </nav>
           </div>
 
@@ -661,13 +805,14 @@ export default function MediaDetail() {
             ) : relatedMedia.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                 {relatedMedia.map((item) => {
-                  const isVideoItem = item.category?.toLowerCase() === "video";
+                  const itemCategory = item.category?.toLowerCase() || "all";
+                  const isVideoItem = itemCategory === "video";
                   if (isVideoItem) {
                     return (
                       <VideoCard
                         key={item.id}
                         media={item}
-                        to={`/media/${item.id}`}
+                        to={`/browse/${itemCategory}/${item.id}`}
                         variant="compact"
                       />
                     );
@@ -680,7 +825,7 @@ export default function MediaDetail() {
                   return (
                     <Link
                       key={item.id}
-                      to={`/media/${item.id}`}
+                      to={`/browse/${itemCategory}/${item.id}`}
                       className="group cursor-pointer touch-manipulation active:scale-[0.98] transition-transform"
                     >
                       <div className="relative overflow-hidden rounded-lg shadow-sm group-hover:shadow-md transition-shadow">

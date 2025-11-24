@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { Link, useSearchParams, useParams, useNavigate } from "react-router-dom";
 import { Loader2, Search, Filter, Play, Image as ImageIcon, Music, Smartphone, FileText, ArrowRight } from "lucide-react";
 import Layout from "@/components/Layout";
 import { Media } from "@shared/api";
@@ -24,11 +24,50 @@ const SORT_OPTIONS = [
 const PAGE_SIZE = 12;
 
 export default function BrowseMedia() {
+  const { category: categoryParam } = useParams<{ category?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const rawCategory = searchParams.get("category");
+  const navigate = useNavigate();
+  
+  // Get category from URL path param (new structure) or query param (legacy)
+  const rawCategory = categoryParam || searchParams.get("category");
   const activeCategory = rawCategory ? rawCategory.toLowerCase() : "all";
   const query = searchParams.get("q") || "";
   const sort = searchParams.get("sort") || "latest";
+  
+  // Sync URL path with category when category changes via query params (for backward compatibility)
+  // Only sync ONCE on initial mount if we have a category in query params but not in path params
+  // This prevents creating excessive history entries
+  const hasSyncedRef = useRef(false);
+  
+  useEffect(() => {
+    // Only sync ONCE if:
+    // 1. We haven't synced yet (hasSyncedRef.current === false)
+    // 2. We have a category in query params but NOT in path params (legacy URL: ?category=video)
+    // 3. Category is not "all"
+    if (!hasSyncedRef.current) {
+      const categoryInQuery = searchParams.get("category");
+      
+      // If we have category in path params, we're already on correct URL structure - mark as synced
+      if (categoryParam) {
+        hasSyncedRef.current = true;
+        return;
+      }
+      
+      // If we have category in query params but not in path, sync once
+      if (categoryInQuery && !categoryParam && activeCategory !== "all") {
+        hasSyncedRef.current = true;
+        // Update URL to use path param instead of query param
+        // Use replace: true to avoid adding history entry for this sync
+        const newSearchParams = new URLSearchParams(searchParams);
+        newSearchParams.delete("category");
+        const queryString = newSearchParams.toString();
+        navigate(`/browse/${activeCategory}${queryString ? `?${queryString}` : ""}`, { replace: true });
+      } else if (!categoryInQuery && !categoryParam) {
+        // No category at all - mark as synced
+        hasSyncedRef.current = true;
+      }
+    }
+  }, [activeCategory, categoryParam, searchParams, navigate]);
 
   const [mediaItems, setMediaItems] = useState<Media[]>([]);
   const [page, setPage] = useState(1);
@@ -100,16 +139,19 @@ export default function BrowseMedia() {
   };
 
   const handleCategoryChange = (category: string) => {
-    setSearchParams((prev) => {
-      const params = new URLSearchParams(prev);
-      if (category === "all") {
-        params.delete("category");
-      } else {
-        params.set("category", category.toLowerCase());
-      }
-      params.delete("page");
-      return params;
-    });
+    const normalizedCategory = category.toLowerCase();
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.delete("page");
+    
+    if (category === "all") {
+      // Navigate to /browse without category in path
+      const queryString = newSearchParams.toString();
+      navigate(`/browse${queryString ? `?${queryString}` : ""}`);
+    } else {
+      // Navigate to /browse/:category with category in path
+      const queryString = newSearchParams.toString();
+      navigate(`/browse/${normalizedCategory}${queryString ? `?${queryString}` : ""}`);
+    }
   };
 
   const handleSortChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -236,13 +278,15 @@ export default function BrowseMedia() {
               const isVideo = media.category?.toLowerCase() === "video";
 
               if (isVideo) {
-                return <VideoCard key={media.id} media={media} to={`/media/${media.id}`} variant="detailed" />;
+                const categoryPath = media.category?.toLowerCase() || "all";
+                return <VideoCard key={media.id} media={media} to={`/browse/${categoryPath}/${media.id}`} variant="detailed" />;
               }
 
+              const categoryPath = media.category?.toLowerCase() || "all";
               return (
                 <Link
                   key={media.id}
-                  to={`/media/${media.id}`}
+                  to={`/browse/${categoryPath}/${media.id}`}
                   className="group bg-white dark:bg-slate-900 border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
                 >
                   <div className="relative aspect-video overflow-hidden bg-slate-100 dark:bg-slate-800">
