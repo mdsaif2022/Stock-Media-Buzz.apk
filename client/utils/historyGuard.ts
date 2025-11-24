@@ -96,54 +96,20 @@ export function setupHistoryGuard() {
   let pushStateCallStack: string[] = []; // Track recent pushState calls for spam detection
 
   // Override pushState to prevent duplicate entries
-  // VERY CONSERVATIVE: Only block if it's the EXACT same URL pushed multiple times in rapid succession (< 50ms)
-  // This catches ad scripts but never interferes with legitimate navigation
+  // DISABLED FOR TESTING: Temporarily allow all pushState calls to diagnose back button issue
+  // If back button works with this disabled, then the guard was interfering
   window.history.pushState = function(state: any, title: string, url?: string | URL | null) {
-    const now = Date.now();
-    const timeSinceLastPush = now - lastPushStateCallTime;
-    lastPushStateCallTime = now;
-
-    // Normalize URLs for comparison
-    const currentUrlKey = getUrlKey();
+    // TEMPORARILY DISABLED - Allow all pushState calls to test if guard is the issue
+    // TODO: Re-enable with minimal blocking once back button is confirmed working
     const newUrlKey = normalizeUrl(url);
-    
-    // If this is programmatic navigation from React Router, always allow it
-    if (isProgrammaticNavigation) {
-      lastPushedUrl = newUrlKey;
-      return originalPushState.call(window.history, state, title, url);
-    }
-    
-    // Track recent calls (keep last 5 for spam detection)
-    pushStateCallStack.push(newUrlKey);
-    if (pushStateCallStack.length > 5) {
-      pushStateCallStack.shift();
-    }
-    
-    // VERY STRICT: Only block if:
-    // 1. It's the EXACT same URL as current (including query/hash)
-    // 2. AND it's the same as the last pushed URL
-    // 3. AND it happened within 50ms (very rapid - definitely spam)
-    // OR: Same URL appears 3+ times in recent calls (spam pattern)
-    const isRapidExactDuplicate = 
-      newUrlKey === currentUrlKey && 
-      lastPushedUrl === newUrlKey && 
-      timeSinceLastPush < 50;
-    
-    const isSpamPattern = pushStateCallStack.filter(u => u === newUrlKey).length >= 3;
-    
-    if (isRapidExactDuplicate || isSpamPattern) {
-      // This is definitely spam - use replaceState instead
-      console.warn('[History Guard] Blocking duplicate/spam:', newUrlKey, {
-        rapid: isRapidExactDuplicate,
-        spamPattern: isSpamPattern,
-      });
-      return originalReplaceState.call(window.history, state, title, url);
-    }
-    
-    // Update tracking for next comparison
     lastPushedUrl = newUrlKey;
     
-    // Allow all other pushState calls (including React Router navigation)
+    // Log in development for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[History Guard] pushState allowed:', newUrlKey);
+    }
+    
+    // Allow ALL pushState calls - no blocking
     return originalPushState.call(window.history, state, title, url);
   };
 

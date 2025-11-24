@@ -27,7 +27,9 @@ import React, { useEffect } from "react";
 import { ADMIN_BASE_PATH } from "./constants/routes";
 import { apiFetch } from "@/lib/api";
 import ScrollToTop from "@/components/ScrollToTop";
+import NavigationMonitor from "@/components/NavigationMonitor";
 import "@/utils/navigationDebug"; // Initialize debug utilities in development
+import "@/utils/testBackButton"; // Initialize back button test utility
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +44,7 @@ function AppRoutes() {
   return (
     <>
       <ScrollToTop />
+      {process.env.NODE_ENV === 'development' && <NavigationMonitor />}
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/browse" element={<BrowseMedia />} />
