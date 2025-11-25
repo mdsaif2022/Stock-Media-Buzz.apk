@@ -204,6 +204,16 @@ export const getDownloadStats: RequestHandler = (req, res) => {
 
 // Proxy video for preview (streaming, not download) - bypasses CORS
 export const proxyVideoPreview: RequestHandler = async (req, res) => {
+  // Handle OPTIONS request for CORS preflight (important for production)
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range');
+    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+    res.status(204).end();
+    return;
+  }
+
   const { mediaId } = req.params;
   
   if (!mediaId) {
@@ -263,6 +273,10 @@ export const proxyVideoPreview: RequestHandler = async (req, res) => {
     const contentType = fileResponse.headers.get('content-type') || 'video/mp4';
     
     // Set headers for video streaming (not download)
+    // CRITICAL: Add CORS headers for production (Vercel)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range');
     res.setHeader('Content-Type', contentType);
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
@@ -288,6 +302,7 @@ export const proxyVideoPreview: RequestHandler = async (req, res) => {
     }
 
     // Stream the video to the response
+    // For Vercel/serverless: Load into buffer (works for most video sizes)
     const buffer = await fileResponse.arrayBuffer();
     res.send(Buffer.from(buffer));
   } catch (error: any) {

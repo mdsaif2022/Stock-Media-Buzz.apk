@@ -27,8 +27,17 @@ export function useVideoThumbnail(videoUrl?: string, existing?: string | null, m
   
   // Use proxy endpoint for video thumbnails to avoid CORS issues
   // If mediaId is provided, use the preview proxy endpoint
+  // CRITICAL: Use absolute URL in production (Vercel) to ensure correct domain
+  const getProxyUrl = (id: string) => {
+    if (typeof window !== 'undefined') {
+      // Use current origin to ensure correct domain in production
+      return `${window.location.origin}/api/media/preview/${id}`;
+    }
+    return `/api/media/preview/${id}`;
+  };
+  
   const thumbnailVideoUrl = mediaId && videoUrl
-    ? `/api/media/preview/${mediaId}`
+    ? getProxyUrl(mediaId)
     : videoUrl;
   
   // Check cache first for initial state
@@ -196,8 +205,16 @@ export function useVideoThumbnail(videoUrl?: string, existing?: string | null, m
 
     const handleError = (e: Event) => {
       if (isCancelled) return;
-      if (process.env.NODE_ENV === 'development') {
-        console.warn("Video thumbnail error:", e);
+      // Log error details for debugging (especially important in production)
+      const errorDetails = {
+        code: (e.target as HTMLVideoElement)?.error?.code,
+        message: (e.target as HTMLVideoElement)?.error?.message,
+        url: thumbnailVideoUrl,
+        mediaId,
+      };
+      
+      if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'production') {
+        console.warn("Video thumbnail error:", errorDetails);
       }
       fallback();
     };

@@ -32,9 +32,18 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
 
   // Use proxy URL for video preview to avoid CORS issues
   // Only use proxy for videos, not other media types
+  // CRITICAL: Use absolute URL in production (Vercel) to ensure correct domain
   const isVideo = media.category?.toLowerCase() === "video";
+  const getVideoProxyUrl = (id: string) => {
+    if (typeof window !== 'undefined') {
+      // Use current origin to ensure correct domain in production
+      return `${window.location.origin}/api/media/preview/${id}`;
+    }
+    return `/api/media/preview/${id}`;
+  };
+  
   const videoUrl = (media.fileUrl && isVideo)
-    ? `/api/media/preview/${media.id}` 
+    ? getVideoProxyUrl(media.id)
     : "";
 
   // Determine if video should be loaded and visible
