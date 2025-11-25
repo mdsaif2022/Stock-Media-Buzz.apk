@@ -132,7 +132,9 @@ export default function MediaDetail() {
           
         } else {
           // Only redirect on error if NOT browser navigation
-          if (!isBackNav) {
+          // Use the same back navigation check as above
+          const isBackNavCheck = navigationType === 'POP' || isBackNavigationActive() || isProcessingBackNavRef.current;
+          if (!isBackNavCheck) {
             // Use replace: true to avoid adding to history when media not found
             // Navigate back to category page if category exists, otherwise to browse
             if (category) {
@@ -145,7 +147,9 @@ export default function MediaDetail() {
       } catch (error) {
         console.error("Failed to fetch media:", error);
         // Only redirect on error if NOT browser navigation
-        if (!isBackNav) {
+        // Use the same back navigation check as above
+        const isBackNavCheck = navigationType === 'POP' || isBackNavigationActive() || isProcessingBackNavRef.current;
+        if (!isBackNavCheck) {
           // Use replace: true to avoid adding to history when error occurs
           // Navigate back to category page if category exists, otherwise to browse
           if (category) {
