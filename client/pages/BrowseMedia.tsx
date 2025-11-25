@@ -93,11 +93,11 @@ export default function BrowseMedia() {
       return; // CRITICAL: Exit early, don't do ANY URL syncing
     }
     
-    // If we recently had back navigation (within last 1 second), don't sync
+    // If we recently had back navigation (within last 500ms), don't sync
     // This prevents redirects immediately after back navigation completes
-    // Reduced to 1 second to allow faster subsequent back clicks
+    // Reduced to 500ms to allow React Router to handle navigation naturally
     const timeSinceLastBack = Date.now() - lastBackNavTimeRef.current;
-    if (timeSinceLastBack < 1000) {
+    if (timeSinceLastBack < 500) {
       if (process.env.NODE_ENV === 'development') {
         console.log('[BrowseMedia] ⏳ Recent back nav detected - skipping sync', {
           timeSinceLastBack: timeSinceLastBack + 'ms'

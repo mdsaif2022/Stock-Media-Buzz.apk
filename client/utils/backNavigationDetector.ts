@@ -35,9 +35,8 @@ export function setupBackNavigationDetector() {
     }
 
     // Reset flag after navigation completes (React Router processes it)
-    // Use a longer timeout to ensure React Router has time to handle it
-    // Also ensure it stays active long enough for useEffect hooks to check it
-    // Increased to 2 seconds to handle multiple rapid back clicks
+    // Use a shorter timeout to allow React Router to handle navigation naturally
+    // We only need to block redirects briefly, not prevent navigation itself
     backNavigationTimeout = setTimeout(() => {
       isBackNavigation = false;
       backNavigationTimeout = null;
@@ -45,7 +44,7 @@ export function setupBackNavigationDetector() {
       if (process.env.NODE_ENV === 'development') {
         console.log('[BackNavDetector] ✅ Back nav flag reset');
       }
-    }, 2000); // Increased to 2 seconds to handle multiple back clicks
+    }, 500); // Reduced to 500ms - just enough to block redirects, not navigation
   };
 
   // Listen for popstate events (browser back/forward button)
@@ -67,14 +66,14 @@ export function setupBackNavigationDetector() {
  * This is more reliable than useNavigationType which can have timing issues
  */
 export function isBackNavigationActive(): boolean {
-  // Check if flag is set AND it's been less than 2 seconds since popstate
-  // This ensures we catch back navigation even if there's a delay
-  // Increased to 2 seconds to handle multiple rapid back clicks
+  // Check if flag is set AND it's been less than 500ms since popstate
+  // We only need to block redirects briefly, not prevent navigation itself
+  // React Router handles the actual navigation, we just prevent unwanted redirects
   if (isBackNavigation) {
     const timeSincePopState = Date.now() - backNavigationStartTime;
-    const isActive = timeSincePopState < 2000; // Active for 2 seconds after popstate
+    const isActive = timeSincePopState < 500; // Active for 500ms after popstate
     if (process.env.NODE_ENV === 'development' && isActive) {
-      console.log('[BackNavDetector] ✅ Back nav active', {
+      console.log('[BackNavDetector] ✅ Back nav active (blocking redirects only)', {
         timeSincePopState: timeSincePopState + 'ms'
       });
     }

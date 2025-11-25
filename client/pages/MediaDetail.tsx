@@ -78,11 +78,12 @@ export default function MediaDetail() {
       prevLocationRef.current = currentPath;
       
       // If path is going back, set processing flag and skip redirects
+      // Use shorter timeout to allow React Router to handle navigation naturally
       if (isPathGoingBack) {
         isProcessingBackNavRef.current = true;
         setTimeout(() => {
           isProcessingBackNavRef.current = false;
-        }, 2000);
+        }, 500); // Reduced to 500ms - just enough to block redirects
         
         // Just fetch media, don't redirect
         try {
