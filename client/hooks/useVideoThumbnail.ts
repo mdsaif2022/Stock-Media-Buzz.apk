@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 const FALLBACK_THUMBNAIL = "https://placehold.co/640x360?text=Video";
 const thumbnailCache = new Map<string, string>();
@@ -24,35 +24,85 @@ function isLikelyImageSource(url?: string | null): boolean {
 
 export function useVideoThumbnail(videoUrl?: string, existing?: string | null, mediaId?: string) {
   const hasValidExisting = isLikelyImageSource(existing);
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | undefined>(
-    hasValidExisting ? existing || undefined : undefined
+  
+  // Use proxy endpoint for video thumbnails to avoid CORS issues
+  // If mediaId is provided, use the preview proxy endpoint
+  const thumbnailVideoUrl = mediaId && videoUrl
+    ? `/api/media/preview/${mediaId}`
+    : videoUrl;
+  
+  // Check cache first for initial state
+  const cachedThumbnail = thumbnailVideoUrl && thumbnailCache.has(thumbnailVideoUrl)
+    ? thumbnailCache.get(thumbnailVideoUrl)
+    : undefined;
+  
+  // Use ref to persist thumbnail across effect re-runs - CRITICAL for preventing disappearing
+  const persistentThumbnailRef = useRef<string | undefined>(
+    hasValidExisting ? existing || undefined : cachedThumbnail || undefined
   );
-  const [status, setStatus] = useState<ThumbnailStatus>(hasValidExisting ? "ready" : "idle");
+  
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | undefined>(
+    persistentThumbnailRef.current
+  );
+  const [status, setStatus] = useState<ThumbnailStatus>(
+    hasValidExisting || cachedThumbnail ? "ready" : "idle"
+  );
 
   useEffect(() => {
     const existingIsImage = isLikelyImageSource(existing);
 
     if (existingIsImage) {
-      setThumbnailUrl(existing || undefined);
-      setStatus("ready");
+      // Only update if different to prevent unnecessary re-renders
+      if (persistentThumbnailRef.current !== existing) {
+        persistentThumbnailRef.current = existing || undefined;
+        setThumbnailUrl(existing || undefined);
+        setStatus("ready");
+      }
       return;
     }
 
-    if (!videoUrl) {
-      setThumbnailUrl(undefined);
-      setStatus("idle");
+    if (!videoUrl || !thumbnailVideoUrl) {
+      // CRITICAL: Never clear if we already have a persistent thumbnail
+      // This is the key fix - we check the ref, not the state
+      if (!persistentThumbnailRef.current || persistentThumbnailRef.current === FALLBACK_THUMBNAIL) {
+        persistentThumbnailRef.current = undefined;
+        setThumbnailUrl(undefined);
+        setStatus("idle");
+      } else {
+        // We have a persistent thumbnail, restore it if state was cleared
+        if (!thumbnailUrl || thumbnailUrl === FALLBACK_THUMBNAIL) {
+          setThumbnailUrl(persistentThumbnailRef.current);
+          setStatus("ready");
+        }
+      }
       return;
     }
 
-    // Use proxy endpoint for video thumbnails to avoid CORS issues
-    // If mediaId is provided, use the preview proxy endpoint
-    const thumbnailVideoUrl = mediaId 
-      ? `/api/media/preview/${mediaId}`
-      : videoUrl;
-
+    // Check cache first - if we have it, use it immediately
     if (thumbnailCache.has(thumbnailVideoUrl)) {
-      setThumbnailUrl(thumbnailCache.get(thumbnailVideoUrl));
-      setStatus("ready");
+      const cachedThumbnail = thumbnailCache.get(thumbnailVideoUrl);
+      // Update both ref and state if different
+      if (persistentThumbnailRef.current !== cachedThumbnail && cachedThumbnail) {
+        persistentThumbnailRef.current = cachedThumbnail;
+        setThumbnailUrl(cachedThumbnail);
+        setStatus("ready");
+      } else if (!thumbnailUrl || thumbnailUrl === FALLBACK_THUMBNAIL) {
+        // Restore from ref if state was cleared
+        setThumbnailUrl(persistentThumbnailRef.current || cachedThumbnail);
+        setStatus("ready");
+      }
+      return;
+    }
+
+    // CRITICAL: If we already have a valid persistent thumbnail, NEVER reset it
+    // This is the main fix - check the ref, not the state
+    if (persistentThumbnailRef.current && persistentThumbnailRef.current !== FALLBACK_THUMBNAIL) {
+      // We already have a thumbnail in ref, restore it to state if needed
+      if (!thumbnailUrl || thumbnailUrl === FALLBACK_THUMBNAIL) {
+        setThumbnailUrl(persistentThumbnailRef.current);
+        setStatus("ready");
+      }
+      // Don't start new extraction - we already have a thumbnail
       return;
     }
 
@@ -95,11 +145,16 @@ export function useVideoThumbnail(videoUrl?: string, existing?: string | null, m
         
         // Cache and set thumbnail
         thumbnailCache.set(thumbnailVideoUrl, dataUrl);
-        setThumbnailUrl(dataUrl);
-        setStatus("ready");
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log("Video thumbnail extracted successfully");
+        // Only update if not cancelled
+        if (!isCancelled) {
+          // CRITICAL: Update both ref and state - ref ensures persistence across re-renders
+          persistentThumbnailRef.current = dataUrl;
+          setThumbnailUrl(dataUrl);
+          setStatus("ready");
+          
+          if (process.env.NODE_ENV === 'development') {
+            console.log("Video thumbnail extracted and set (persistent):", dataUrl.substring(0, 50) + "...");
+          }
         }
       } catch (error) {
         console.error("Failed to extract video thumbnail:", error);
@@ -149,9 +204,19 @@ export function useVideoThumbnail(videoUrl?: string, existing?: string | null, m
 
     const fallback = () => {
       if (isCancelled) return;
-      thumbnailCache.set(thumbnailVideoUrl, FALLBACK_THUMBNAIL);
-      setThumbnailUrl(FALLBACK_THUMBNAIL);
-      setStatus("error");
+      // Only set fallback if we don't already have a valid persistent thumbnail
+      // Check ref, not state - this prevents overwriting a good thumbnail
+      if (!persistentThumbnailRef.current || persistentThumbnailRef.current === FALLBACK_THUMBNAIL) {
+        persistentThumbnailRef.current = FALLBACK_THUMBNAIL;
+        thumbnailCache.set(thumbnailVideoUrl, FALLBACK_THUMBNAIL);
+        setThumbnailUrl(FALLBACK_THUMBNAIL);
+        setStatus("error");
+      } else {
+        // We have a valid thumbnail in ref, restore it and cache it
+        thumbnailCache.set(thumbnailVideoUrl, persistentThumbnailRef.current);
+        setThumbnailUrl(persistentThumbnailRef.current);
+        setStatus("ready");
+      }
     };
 
     // Try multiple events for better compatibility
@@ -182,8 +247,12 @@ export function useVideoThumbnail(videoUrl?: string, existing?: string | null, m
     };
   }, [videoUrl, existing, mediaId]);
 
+  // Always return persistent thumbnail if available, otherwise use state or fallback
+  // This ensures thumbnails never disappear even if state is temporarily cleared
+  const finalThumbnail = persistentThumbnailRef.current || thumbnailUrl || FALLBACK_THUMBNAIL;
+  
   return {
-    thumbnailUrl: thumbnailUrl || FALLBACK_THUMBNAIL,
+    thumbnailUrl: finalThumbnail,
     status,
   };
 }

@@ -44,20 +44,30 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
   // Preload video metadata when in view (even if not hovering) for faster hover response
   const shouldPreloadVideo = isInView && videoUrl && !previewError;
 
+  // Store thumbnail in ref to prevent it from disappearing
+  const thumbnailRef = useRef<string | undefined>(undefined);
+  
   const safeThumbnail = useMemo(() => {
     if (thumbnailError) {
-      return FALLBACK_VIDEO_THUMBNAIL;
+      // Use cached thumbnail if available, otherwise fallback
+      return thumbnailRef.current || FALLBACK_VIDEO_THUMBNAIL;
     }
 
-    const source = thumbnailUrl || FALLBACK_VIDEO_THUMBNAIL;
+    const source = thumbnailUrl || thumbnailRef.current || FALLBACK_VIDEO_THUMBNAIL;
+
+    // Update ref when we have a valid thumbnail
+    if (source && source !== FALLBACK_VIDEO_THUMBNAIL) {
+      thumbnailRef.current = source;
+    }
 
     try {
       const sanitized = source.split("?")[0].toLowerCase();
       if (/\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(sanitized)) {
-        return FALLBACK_VIDEO_THUMBNAIL;
+        // Use cached thumbnail if available
+        return thumbnailRef.current || FALLBACK_VIDEO_THUMBNAIL;
       }
     } catch {
-      return FALLBACK_VIDEO_THUMBNAIL;
+      return thumbnailRef.current || FALLBACK_VIDEO_THUMBNAIL;
     }
 
     return source;
