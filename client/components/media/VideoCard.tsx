@@ -14,6 +14,7 @@ interface VideoCardProps {
 }
 
 const PREVIEW_DURATION = 5;
+const FALLBACK_VIDEO_THUMBNAIL = "https://placehold.co/640x360?text=Video";
 
 export function VideoCard({ media, to, variant = "detailed", className }: VideoCardProps) {
   const cardRef = useRef<HTMLAnchorElement>(null);
@@ -24,11 +25,11 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
   const [isHovering, setIsHovering] = useState(false);
   const [isPreviewReady, setIsPreviewReady] = useState(false);
   const [previewError, setPreviewError] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState(false);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { thumbnailUrl } = useVideoThumbnail(media.fileUrl, media.previewUrl);
+  const { thumbnailUrl } = useVideoThumbnail(media.fileUrl, media.previewUrl, media.id);
 
-  const shouldLoadVideo = isInView || isHovering;
-  
   // Use proxy URL for video preview to avoid CORS issues
   // Only use proxy for videos, not other media types
   const isVideo = media.category?.toLowerCase() === "video";
@@ -37,19 +38,41 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
     : "";
 
   // Determine if video should be loaded and visible
+  // YouTube-style: Show video when hovering (with smooth transition)
   const shouldShowVideo = isHovering && supportsHover && videoUrl && !previewError;
-  // Always set video src when videoUrl exists, but control loading with preload
-  const videoSrc = videoUrl || "";
+  
+  // Preload video metadata when in view (even if not hovering) for faster hover response
+  const shouldPreloadVideo = isInView && videoUrl && !previewError;
 
+  const safeThumbnail = useMemo(() => {
+    if (thumbnailError) {
+      return FALLBACK_VIDEO_THUMBNAIL;
+    }
+
+    const source = thumbnailUrl || FALLBACK_VIDEO_THUMBNAIL;
+
+    try {
+      const sanitized = source.split("?")[0].toLowerCase();
+      if (/\.(mp4|webm|mov|avi|mkv|m4v)$/i.test(sanitized)) {
+        return FALLBACK_VIDEO_THUMBNAIL;
+      }
+    } catch {
+      return FALLBACK_VIDEO_THUMBNAIL;
+    }
+
+    return source;
+  }, [thumbnailUrl, thumbnailError]);
+
+  // Monitor video playback and pause at PREVIEW_DURATION (YouTube-style)
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !supportsHover) return;
+    if (!video || !supportsHover || !isVideo) return;
 
     const handleTimeUpdate = () => {
+      // Pause video at PREVIEW_DURATION seconds (don't reset isHovering - keep hover state)
       if (video.currentTime >= PREVIEW_DURATION) {
         video.pause();
-        video.currentTime = 0;
-        setIsHovering(false);
+        // Keep video at PREVIEW_DURATION (don't reset to 0) for smooth UX
       }
     };
 
@@ -57,63 +80,95 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate);
     };
-  }, [supportsHover]);
+  }, [supportsHover, isVideo]);
 
-  // Play/pause video based on hover state
+  // Set video source early (when in view) to allow preloading metadata
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isVideo || !videoUrl) return;
+
+    // Set video src when component is in view (allows metadata preload)
+    if (shouldPreloadVideo) {
+      const currentSrc = video.src || video.currentSrc || '';
+      if (!currentSrc.includes(videoUrl)) {
+        video.src = videoUrl;
+        // Preload metadata for faster hover response
+        video.preload = "metadata";
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+    };
+  }, [shouldPreloadVideo, videoUrl, isVideo]);
+
+  // YouTube-style hover preview: Play video on hover, pause on hover-out
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !isVideo || !videoUrl) return;
 
     if (shouldShowVideo) {
-      // When hovering, ensure video is loaded and try to play
+      // HOVERING: Start playing video preview
       const tryPlay = async () => {
         try {
-          // Reset video to start
+          // Reset to start for fresh preview
           video.currentTime = 0;
           
-          // If video is already loaded enough, play immediately
+          // If video has enough data, play immediately
           if (video.readyState >= 2) { // HAVE_CURRENT_DATA
-            await video.play();
+            setIsPreviewReady(true);
+            await video.play().catch(() => {
+              // Autoplay blocked - show thumbnail instead
+              setPreviewError(false); // Don't mark as error, just can't autoplay
+            });
           } else {
-            // Wait for video to have enough data, then play
+            // Wait for video to load, then play
             const handleCanPlay = async () => {
               try {
                 video.currentTime = 0;
-                await video.play();
+                setIsPreviewReady(true);
+                await video.play().catch(() => {
+                  // Autoplay blocked - show thumbnail instead
+                });
               } catch (err) {
-                // Autoplay blocked or other error - silently fail
-                console.warn("Video autoplay blocked:", err);
+                // Silently handle autoplay errors
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn("Video autoplay blocked:", err);
+                }
               }
             };
             
-            // Try multiple events to catch when video is ready
+            // Listen for video ready events
             video.addEventListener('canplay', handleCanPlay, { once: true });
             video.addEventListener('loadeddata', handleCanPlay, { once: true });
             video.addEventListener('loadedmetadata', handleCanPlay, { once: true });
           }
         } catch (err) {
-          // Autoplay blocked or other error - silently fail
-          console.warn("Video play error:", err);
+          // Silently handle errors
+          if (process.env.NODE_ENV === 'development') {
+            console.warn("Video play error:", err);
+          }
         }
       };
       
-      // Ensure video src is set (it should be from JSX, but double-check)
-      // video.src returns full URL, so check if it includes the videoUrl path
-      const currentSrc = video.src || video.currentSrc || '';
-      if (videoUrl && !currentSrc.includes(videoUrl)) {
+      // Ensure video src is set
+      if (!video.src || !video.src.includes(videoUrl)) {
         video.src = videoUrl;
       }
-      // Load the video to start buffering
-      video.load();
-      // Try to play once loaded
+      
+      // Try to play
       tryPlay();
-    } else if (!isHovering || !supportsHover) {
-      // Not hovering, pause and reset
+    } else {
+      // NOT HOVERING: Pause and reset to thumbnail
       video.pause();
       video.currentTime = 0;
       setIsPreviewReady(false);
     }
-  }, [shouldShowVideo, isHovering, supportsHover, videoUrl, isVideo]);
+  }, [shouldShowVideo, videoUrl, isVideo]);
 
   const meta = useMemo(() => {
     const downloads = Number(media.downloads) || 0;
@@ -133,8 +188,22 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
         "group bg-white dark:bg-slate-900 border border-border rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col touch-manipulation active:scale-[0.98] transition-transform",
         className
       )}
-      onMouseEnter={() => supportsHover && setIsHovering(true)}
-      onMouseLeave={() => supportsHover && setIsHovering(false)}
+      onMouseEnter={() => {
+        if (!supportsHover) return;
+        // YouTube-style: Small delay before starting preview (prevents accidental triggers)
+        hoverTimeoutRef.current = setTimeout(() => {
+          setIsHovering(true);
+        }, 200); // 200ms delay like YouTube
+      }}
+      onMouseLeave={() => {
+        if (hoverTimeoutRef.current) {
+          clearTimeout(hoverTimeoutRef.current);
+          hoverTimeoutRef.current = null;
+        }
+        if (supportsHover) {
+          setIsHovering(false);
+        }
+      }}
       onFocus={() => setIsHovering(false)}
     >
       <div className="relative aspect-video bg-slate-900">
@@ -142,13 +211,13 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
           <>
             <video
               ref={videoRef}
-              src={videoSrc}
-              poster={thumbnailUrl}
+              src={videoUrl}
+              poster={safeThumbnail}
               muted
               playsInline
-              preload={shouldShowVideo ? "metadata" : "none"}
-              className={cn("w-full h-full object-cover transition-opacity duration-200 absolute inset-0 z-10", {
-                "opacity-0": !isPreviewReady || previewError || !shouldShowVideo,
+              preload={shouldPreloadVideo ? "metadata" : "none"}
+              className={cn("w-full h-full object-cover transition-opacity duration-300 absolute inset-0 z-10", {
+                "opacity-0 pointer-events-none": !isPreviewReady || previewError || !shouldShowVideo,
                 "opacity-100": isPreviewReady && !previewError && shouldShowVideo,
               })}
               onLoadedData={() => {
@@ -170,36 +239,37 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
                 }
               }}
               onWaiting={() => {
-                // Video is buffering, keep it visible
-                if (shouldShowVideo) {
-                  setIsPreviewReady(true);
+                // Video is buffering - keep showing video if it was already playing
+                if (shouldShowVideo && isPreviewReady) {
+                  // Keep video visible during buffering
                 }
               }}
               onError={(e) => {
                 // Handle video errors - show thumbnail instead
-                console.warn("Video preview error for media:", media.id, e);
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn("Video preview error for media:", media.id, e);
+                }
                 setPreviewError(true);
                 setIsPreviewReady(false);
               }}
             />
-            {/* Always show thumbnail as fallback - visible when video is not playing */}
-            {thumbnailUrl && (
-              <img
-                src={thumbnailUrl}
-                alt={media.title}
-                className={cn("absolute inset-0 w-full h-full object-cover transition-opacity duration-200 z-0", {
-                  "opacity-0": shouldShowVideo && isPreviewReady && !previewError,
-                  "opacity-100": !shouldShowVideo || !isPreviewReady || previewError,
-                })}
-                loading="lazy"
-                onError={() => {
-                  // If thumbnail also fails, show unavailable message
-                  setPreviewError(true);
-                }}
-              />
-            )}
+            {/* Thumbnail - always visible by default, hidden only when video is playing (YouTube-style) */}
+            <img
+              src={safeThumbnail}
+              alt={media.title}
+              className={cn(
+                "absolute inset-0 w-full h-full object-cover transition-opacity duration-300 z-0",
+                shouldShowVideo && isPreviewReady && !previewError ? "opacity-0" : "opacity-100"
+              )}
+              loading="lazy"
+              onError={() => {
+                // If thumbnail fails to load, fall back to placeholder
+                setThumbnailError(true);
+                setPreviewError(true);
+              }}
+            />
             {/* Only show unavailable if both video and thumbnail fail */}
-            {previewError && !thumbnailUrl && (
+            {previewError && thumbnailError && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-gradient-to-br from-slate-600 to-slate-900 gap-2">
                 <Video className="w-10 h-10" />
                 <span className="text-sm font-medium">Video preview unavailable</span>
@@ -213,16 +283,23 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
           </div>
         )}
 
-        <div
-          className={cn(
-            "absolute inset-0 pointer-events-none bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center",
-            !supportsHover && "opacity-0"
-          )}
-        >
-          <span className="flex items-center justify-center rounded-full bg-white/80 text-slate-900 w-12 h-12 shadow-lg">
-            <Play className="w-6 h-6" />
-          </span>
-        </div>
+        {/* Play button overlay - shows on thumbnail, hidden when video is playing (YouTube-style) */}
+        {(() => {
+          // Show play button only when video is NOT playing
+          const isVideoPlaying = shouldShowVideo && isPreviewReady && !previewError;
+          return (
+            <div
+              className={cn(
+                "absolute inset-0 pointer-events-none bg-black/40 transition-opacity flex items-center justify-center z-20",
+                isVideoPlaying ? "opacity-0" : supportsHover && isHovering ? "opacity-100" : "opacity-0"
+              )}
+            >
+              <span className="flex items-center justify-center rounded-full bg-white/80 text-slate-900 w-12 h-12 shadow-lg">
+                <Play className="w-6 h-6" />
+              </span>
+            </div>
+          );
+        })()}
       </div>
 
       <div className={cn("p-4 space-y-2 flex-1", variant === "compact" && "p-3")}>

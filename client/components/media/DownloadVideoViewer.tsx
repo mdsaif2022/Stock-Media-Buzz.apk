@@ -12,16 +12,17 @@ interface DownloadVideoViewerProps {
 export function DownloadVideoViewer({ media }: DownloadVideoViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(containerRef);
-  const { thumbnailUrl } = useVideoThumbnail(media.fileUrl, media.previewUrl);
+  const { thumbnailUrl } = useVideoThumbnail(media.fileUrl, media.previewUrl, media.id);
+  const fallbackThumbnail = thumbnailUrl || "https://placehold.co/640x360?text=Video";
 
   return (
     <div ref={containerRef} className="aspect-video rounded-lg overflow-hidden relative shadow-lg bg-slate-900">
       {isInView ? (
-        <VideoPlayer src={media.fileUrl} poster={thumbnailUrl} preload="metadata" autoPlay={false} className="h-full" />
+        <VideoPlayer src={media.fileUrl} poster={fallbackThumbnail} preload="metadata" autoPlay={false} className="h-full" />
       ) : (
         <div className="w-full h-full relative">
           <img
-            src={thumbnailUrl}
+            src={fallbackThumbnail}
             alt={media.title}
             className="w-full h-full object-cover"
             loading="lazy"
