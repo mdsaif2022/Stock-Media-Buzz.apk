@@ -35,8 +35,8 @@ export function setupBackNavigationDetector() {
     }
 
     // Reset flag after navigation completes (React Router processes it)
-    // Use a shorter timeout to allow React Router to handle navigation naturally
-    // We only need to block redirects briefly, not prevent navigation itself
+    // Use a longer timeout to prevent redirects from running after back navigation
+    // Need enough time for all useEffect hooks to complete and not trigger redirects
     backNavigationTimeout = setTimeout(() => {
       isBackNavigation = false;
       backNavigationTimeout = null;
@@ -44,7 +44,7 @@ export function setupBackNavigationDetector() {
       if (process.env.NODE_ENV === 'development') {
         console.log('[BackNavDetector] ✅ Back nav flag reset');
       }
-    }, 500); // Reduced to 500ms - just enough to block redirects, not navigation
+    }, 2000); // Increased to 2 seconds to prevent redirects after back navigation completes
   };
 
   // Listen for popstate events (browser back/forward button)
@@ -66,12 +66,12 @@ export function setupBackNavigationDetector() {
  * This is more reliable than useNavigationType which can have timing issues
  */
 export function isBackNavigationActive(): boolean {
-  // Check if flag is set AND it's been less than 500ms since popstate
-  // We only need to block redirects briefly, not prevent navigation itself
+  // Check if flag is set AND it's been less than 2 seconds since popstate
+  // We need enough time to prevent redirects from running after back navigation completes
   // React Router handles the actual navigation, we just prevent unwanted redirects
   if (isBackNavigation) {
     const timeSincePopState = Date.now() - backNavigationStartTime;
-    const isActive = timeSincePopState < 500; // Active for 500ms after popstate
+    const isActive = timeSincePopState < 2000; // Active for 2 seconds after popstate
     if (process.env.NODE_ENV === 'development' && isActive) {
       console.log('[BackNavDetector] ✅ Back nav active (blocking redirects only)', {
         timeSincePopState: timeSincePopState + 'ms'
