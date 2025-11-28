@@ -186,34 +186,38 @@ export default function PopupAd() {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent
         className={cn(
-          "max-w-2xl p-0 overflow-hidden",
-          "sm:rounded-lg"
+          "max-w-md sm:max-w-lg p-0 overflow-hidden",
+          "sm:rounded-xl",
+          "max-h-[90vh] flex flex-col"
         )}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={handleClose}
       >
-        <div className="relative">
+        <div className="relative flex flex-col max-h-[90vh]">
           {/* Close Button */}
           <button
             onClick={handleClose}
-            className="absolute top-4 right-4 z-50 rounded-full bg-black/50 hover:bg-black/70 text-white p-2 transition-colors"
+            className="absolute top-3 right-3 z-50 rounded-full bg-black/60 hover:bg-black/80 text-white p-1.5 transition-colors shadow-lg"
             aria-label="Close ad"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
 
           {/* Media Content */}
           <div
             className={cn(
-              "relative w-full",
-              currentAd.mediaType === "video" ? "aspect-video" : "aspect-auto"
+              "relative w-full overflow-hidden",
+              "flex items-center justify-center",
+              currentAd.mediaType === "video" 
+                ? "max-h-[50vh] aspect-video bg-black" 
+                : "max-h-[60vh] bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800"
             )}
             onClick={handleMediaClick}
           >
             {currentAd.mediaType === "video" ? (
               <video
                 src={currentAd.mediaUrl}
-                className="w-full h-full object-contain bg-black"
+                className="w-full h-full max-w-full max-h-full object-contain"
                 autoPlay
                 muted
                 loop
@@ -224,21 +228,26 @@ export default function PopupAd() {
               <img
                 src={currentAd.mediaUrl}
                 alt={currentAd.title}
-                className="w-full h-auto object-contain bg-white dark:bg-slate-900"
+                className="w-full h-auto max-w-full max-h-full object-contain"
                 onClick={currentAd.buttonLink ? handleMediaClick : undefined}
-                style={{ cursor: currentAd.buttonLink ? "pointer" : "default" }}
+                style={{ 
+                  cursor: currentAd.buttonLink ? "pointer" : "default",
+                  maxHeight: "60vh"
+                }}
               />
             )}
           </div>
 
           {/* Ad Info Section */}
           {(currentAd.title || currentAd.description || currentAd.buttonText) && (
-            <div className="p-4 sm:p-6 bg-white dark:bg-slate-900 border-t border-border">
+            <div className="p-4 sm:p-5 bg-white dark:bg-slate-900 border-t border-border flex-shrink-0">
               {currentAd.title && (
-                <DialogHeader>
-                  <DialogTitle className="text-left">{currentAd.title}</DialogTitle>
+                <DialogHeader className="space-y-2">
+                  <DialogTitle className="text-left text-lg font-bold leading-tight">
+                    {currentAd.title}
+                  </DialogTitle>
                   {currentAd.description && (
-                    <DialogDescription className="text-left">
+                    <DialogDescription className="text-left text-sm text-muted-foreground">
                       {currentAd.description}
                     </DialogDescription>
                   )}
@@ -248,7 +257,8 @@ export default function PopupAd() {
                 <div className="mt-4">
                   <Button
                     onClick={handleButtonClick}
-                    className="w-full sm:w-auto bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                    className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 font-medium"
+                    size="default"
                   >
                     {currentAd.buttonText}
                   </Button>
