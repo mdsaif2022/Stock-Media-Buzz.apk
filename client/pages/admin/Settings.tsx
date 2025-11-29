@@ -1,6 +1,6 @@
 import AdminLayout from "@/components/AdminLayout";
-import { Save } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Save, Upload, X, Loader2 } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
 import { apiFetch } from "@/lib/api";
 
 async function resizeImageToPng(dataUrl: string, size = 64): Promise<string> {
@@ -42,6 +42,9 @@ export default function AdminSettings() {
   const [paymentMessage, setPaymentMessage] = useState("");
 
   const [faviconPreview, setFaviconPreview] = useState<string>("");
+  const [logoPreview, setLogoPreview] = useState<string>("");
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [brandingStatus, setBrandingStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [brandingMessage, setBrandingMessage] = useState("");
 
@@ -69,6 +72,9 @@ export default function AdminSettings() {
           const branding = await brandingRes.json();
           if (branding?.faviconDataUrl) {
             setFaviconPreview(branding.faviconDataUrl);
+          }
+          if (branding?.logo) {
+            setLogoPreview(branding.logo);
           }
         } else {
           setBrandingMessage("Unable to load branding settings.");
@@ -133,23 +139,113 @@ export default function AdminSettings() {
     reader.readAsDataURL(file);
   };
 
+  const handleLogoUpload = async (file: File) => {
+    if (!file) return;
+    
+    // Validate file type
+    const validTypes = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml"];
+    if (!validTypes.includes(file.type)) {
+      setBrandingStatus("error");
+      setBrandingMessage("Invalid file type. Please upload PNG, JPG, or SVG.");
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setBrandingStatus("error");
+      setBrandingMessage("File size must be less than 5MB.");
+      return;
+    }
+
+    setLogoUploading(true);
+    setBrandingMessage("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "site-assets");
+      formData.append("resource_type", "image");
+      formData.append("public_id", "site-logo");
+      formData.append("server", "auto");
+
+      const uploadResponse = await apiFetch("/api/upload/asset", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Failed to upload logo");
+      }
+
+      const uploadData = await uploadResponse.json();
+      console.log("Upload response:", uploadData);
+      
+      if (uploadData.secureUrl || uploadData.secure_url || uploadData.url) {
+        const logoUrl = uploadData.secureUrl || uploadData.secure_url || uploadData.url;
+        setLogoPreview(logoUrl);
+        setBrandingStatus("success");
+        setBrandingMessage("Logo uploaded successfully. Click 'Save Branding' to save changes.");
+      } else {
+        console.error("Upload data missing URL:", uploadData);
+        throw new Error("No URL returned from upload. Response: " + JSON.stringify(uploadData));
+      }
+    } catch (error: any) {
+      console.error("Logo upload error:", error);
+      setBrandingStatus("error");
+      const errorMessage = error.message || "Failed to upload logo.";
+      setBrandingMessage(errorMessage);
+      // Show error details if available
+      if (error.response) {
+        error.response.json().then((errData: any) => {
+          setBrandingMessage(errorMessage + " Details: " + (errData.message || errData.error || ""));
+        }).catch(() => {});
+      }
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const handleLogoFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleLogoUpload(file);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoPreview("");
+    setBrandingMessage("");
+    if (logoInputRef.current) {
+      logoInputRef.current.value = "";
+    }
+  };
+
   const handleBrandingSave = async () => {
     setBrandingStatus("saving");
     setBrandingMessage("");
     try {
+      // Always save both favicon and logo (empty string if not set)
       const response = await apiFetch("/api/settings/branding", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ faviconDataUrl: faviconPreview }),
+        body: JSON.stringify({ 
+          faviconDataUrl: faviconPreview || "",
+          logo: logoPreview || "",
+        }),
       });
       if (!response.ok) {
-        throw new Error("Failed to update branding settings");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || "Failed to update branding settings");
       }
+      const saved = await response.json();
+      // Update preview with saved values to ensure sync
+      if (saved.logo) setLogoPreview(saved.logo);
       setBrandingStatus("success");
-      setBrandingMessage("Browser icon updated.");
+      setBrandingMessage("Branding settings saved successfully. Logo will appear in the header.");
     } catch (error: any) {
+      console.error("Save branding error:", error);
       setBrandingStatus("error");
       setBrandingMessage(error.message || "Failed to save branding settings.");
     }
@@ -248,14 +344,14 @@ export default function AdminSettings() {
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
               <h3 className="text-lg font-bold">Branding</h3>
-              <p className="text-sm text-muted-foreground">Upload a custom browser icon (favicon) for the site.</p>
+              <p className="text-sm text-muted-foreground">Upload a custom browser icon (favicon) and site logo.</p>
             </div>
             <button
               onClick={handleBrandingSave}
               disabled={brandingStatus === "saving"}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
             >
-              {brandingStatus === "saving" ? "Saving..." : "Save Browser Icon"}
+              {brandingStatus === "saving" ? "Saving..." : "Save Branding"}
             </button>
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
@@ -276,6 +372,69 @@ export default function AdminSettings() {
                 ) : (
                   <span className="text-xs text-muted-foreground">No icon</span>
                 )}
+              </div>
+            </div>
+          </div>
+          {/* Site Logo Upload */}
+          <div className="border-t border-border pt-4 mt-4">
+            <h4 className="text-base font-semibold mb-3">Site Logo</h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              Upload a logo that will appear next to the site title in the header. Recommended: PNG, JPG, or SVG (max 5MB).
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                  onChange={handleLogoFileChange}
+                  className="hidden"
+                  id="logo-upload"
+                  disabled={logoUploading}
+                />
+                <label
+                  htmlFor="logo-upload"
+                  className={`flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-border rounded-lg cursor-pointer transition-colors ${
+                    logoUploading
+                      ? "opacity-50 cursor-not-allowed bg-slate-50 dark:bg-slate-800"
+                      : "hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  {logoUploading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                      <span className="text-sm font-medium">Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-5 h-5 text-muted-foreground" />
+                      <span className="text-sm font-medium">Choose Logo File</span>
+                    </>
+                  )}
+                </label>
+              </div>
+              <div className="flex flex-col items-center justify-center gap-2 text-sm text-muted-foreground min-w-[120px]">
+                <span>Preview</span>
+                <div className="relative w-24 h-16 rounded-lg border border-dashed border-border flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+                  {logoPreview ? (
+                    <>
+                      <img
+                        src={logoPreview}
+                        alt="Logo preview"
+                        className="max-w-full max-h-full object-contain"
+                      />
+                      <button
+                        onClick={handleRemoveLogo}
+                        className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-destructive text-white flex items-center justify-center hover:bg-destructive/90 transition-colors"
+                        title="Remove logo"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-muted-foreground text-center px-2">No logo</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>

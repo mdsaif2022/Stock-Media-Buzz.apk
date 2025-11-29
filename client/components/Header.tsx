@@ -1,18 +1,47 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Menu, X, LogOut, LogIn, User } from "lucide-react";
 import AdsSlider from "./AdsSlider";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThemeToggle } from "./ThemeToggle";
+import { apiFetch } from "@/lib/api";
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [logoFailed, setLogoFailed] = useState(false);
+  const [siteLogo, setSiteLogo] = useState<string>("");
   const { currentUser, logout, creatorProfile } = useAuth();
   const navigate = useNavigate();
   
   const isLoggedIn = !!currentUser;
+
+  // Load site logo from settings
+  useEffect(() => {
+    const loadLogo = async () => {
+      try {
+        const res = await apiFetch("/api/settings/branding");
+        if (res.ok) {
+          const branding = await res.json();
+          if (branding?.logo) {
+            setSiteLogo(branding.logo);
+          } else {
+            // Clear logo if it was removed
+            setSiteLogo("");
+          }
+        }
+      } catch (error) {
+        console.error("Failed to load site logo:", error);
+        // Silently fail - use default logo
+      }
+    };
+    
+    loadLogo();
+    
+    // Refresh logo every 30 seconds in case it was updated
+    const interval = setInterval(loadLogo, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -31,11 +60,22 @@ export default function Header() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
-            {!logoFailed ? (
+            {siteLogo ? (
+              <img
+                src={siteLogo}
+                alt="Site Logo"
+                className="h-8 w-auto sm:h-10 max-w-[120px] sm:max-w-[150px] object-contain flex-shrink-0"
+                loading="lazy"
+                onError={() => {
+                  setSiteLogo("");
+                  setLogoFailed(true);
+                }}
+              />
+            ) : !logoFailed ? (
               <img
                 src="/apple-touch-icon.png"
                 alt="FreeMediaBuzz Logo"
-                className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg object-cover"
+                className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg object-cover flex-shrink-0"
                 loading="lazy"
                 onError={(event) => {
                   (event.currentTarget as HTMLImageElement).style.display = "none";
@@ -43,11 +83,11 @@ export default function Header() {
                 }}
               />
             ) : (
-              <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
+              <div className="h-8 w-8 sm:h-10 sm:w-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center flex-shrink-0">
                 <span className="text-white font-bold text-lg">F</span>
               </div>
             )}
-            <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+            <span className="text-lg sm:text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent whitespace-nowrap">
               FreeMediaBuzz
             </span>
           </Link>

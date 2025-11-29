@@ -12,6 +12,7 @@ interface PaymentSettings {
 
 interface BrandingSettings {
   faviconDataUrl?: string;
+  logo?: string;
 }
 
 interface GeneralSettings {
@@ -31,6 +32,7 @@ const DEFAULT_SETTINGS: SettingsStore = {
   },
   branding: {
     faviconDataUrl: "",
+    logo: "",
   },
   general: {
     maintenanceMode: false,
@@ -49,6 +51,7 @@ async function loadSettings(): Promise<SettingsStore> {
       },
       branding: {
         faviconDataUrl: parsed?.branding?.faviconDataUrl || "",
+        logo: parsed?.branding?.logo || "",
       },
       general: {
         maintenanceMode:
@@ -101,11 +104,12 @@ export const getBrandingSettings: RequestHandler = async (_req, res) => {
 };
 
 export const updateBrandingSettings: RequestHandler = async (req, res) => {
-  const { faviconDataUrl } = req.body as BrandingSettings;
+  const { faviconDataUrl, logo } = req.body as BrandingSettings;
 
   const store = await loadSettings();
   store.branding = {
-    faviconDataUrl: faviconDataUrl || "",
+    faviconDataUrl: faviconDataUrl !== undefined ? (faviconDataUrl || "") : store.branding.faviconDataUrl,
+    logo: logo !== undefined ? (logo || "") : store.branding.logo,
   };
 
   await saveSettings(store);
