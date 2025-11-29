@@ -1,5 +1,5 @@
 import AdminLayout from "@/components/AdminLayout";
-import { Plus, Edit, Trash2, Search, Filter, Upload, X, File, Image as ImageIcon, Video, Music, FileText, CheckCircle2, Link as LinkIcon } from "lucide-react";
+import { Plus, Edit, Search, Filter, Upload, X, File, Image as ImageIcon, Video, Music, FileText, CheckCircle2, Link as LinkIcon } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
 import { Switch } from "@/components/ui/switch";
@@ -368,7 +368,7 @@ export default function AdminMedia() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold">Media Management</h1>
-            <p className="text-muted-foreground mt-2">Add, edit, or delete media files</p>
+            <p className="text-muted-foreground mt-2">Add and edit media files. All uploaded content is permanent and cannot be deleted.</p>
           </div>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
@@ -1009,29 +1009,6 @@ export default function AdminMedia() {
                         <div className="flex justify-end gap-2">
                           <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors touch-manipulation">
                             <Edit className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              if (confirm(`Are you sure you want to delete "${item.title}"?`)) {
-                                try {
-                                  const response = await apiFetch(`/api/media/${item.id}`, {
-                                    method: "DELETE",
-                                  });
-                                  if (response.ok) {
-                                    await fetchMedia();
-                                    alert("Media deleted successfully!");
-                                  } else {
-                                    alert("Failed to delete media");
-                                  }
-                                } catch (error) {
-                                  console.error("Delete error:", error);
-                                  alert("Failed to delete media");
-                                }
-                              }
-                            }}
-                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors touch-manipulation"
-                          >
-                            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
                           </button>
                         </div>
                       </td>

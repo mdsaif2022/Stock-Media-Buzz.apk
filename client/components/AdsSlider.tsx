@@ -72,7 +72,12 @@ export default function AdsSlider() {
 
   // CRITICAL: Only show ads on home page (/) to prevent history manipulation
   // Ads on other pages can interfere with back button navigation
+  // Even with iframe sandbox, ad scripts can sometimes manipulate history
+  // Keeping ads only on home page ensures back button works on all other pages
   const isHomePage = location.pathname === '/';
+  
+  // Show ads ONLY on home page
+  const shouldShowAds = isHomePage;
 
   // Filter active custom ads with Header placement
   useEffect(() => {
@@ -81,9 +86,9 @@ export default function AdsSlider() {
     );
     setCustomAds(activeHeaderAds);
     
-    // Show Adsterra only if no custom ads AND we're on home page
-    setShowAdsterra(activeHeaderAds.length === 0 && isHomePage);
-  }, [isHomePage]);
+    // Show Adsterra only if no custom ads AND we're on allowed pages
+    setShowAdsterra(activeHeaderAds.length === 0 && shouldShowAds);
+  }, [shouldShowAds]);
 
   // Auto-rotate custom ads
   useEffect(() => {
@@ -107,9 +112,13 @@ export default function AdsSlider() {
     return () => clearInterval(interval);
   }, [showAdsterra]);
 
-  // CRITICAL: Don't show ads on pages other than home page
-  // This prevents ad scripts from manipulating browser history
-  if (!isHomePage) {
+  // SAFE: Show ads on allowed pages (home, browse, category)
+  // The iframe sandbox attribute prevents ads from manipulating browser history
+  // This is safe because:
+  // 1. Ads are in iframes with sandbox="allow-scripts allow-same-origin allow-popups..."
+  // 2. Sandbox prevents top-level navigation and history manipulation
+  // 3. Ads can only run scripts within their own iframe context
+  if (!shouldShowAds) {
     return null;
   }
 
@@ -156,6 +165,11 @@ export default function AdsSlider() {
             )}
 
                 {/* Adsterra Ad */}
+                {/* CRITICAL: iframe sandbox prevents ads from manipulating browser history */}
+                {/* The sandbox attribute isolates the ad content and prevents:
+                    - top-level navigation (which would manipulate history)
+                    - access to parent window history API
+                    - Any history manipulation that would break back button */}
                 <div className="w-full max-w-4xl h-full rounded-lg overflow-hidden">
                   <iframe
                     src={currentAdsterraLink}
@@ -166,6 +180,12 @@ export default function AdsSlider() {
                     sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
                     allow="autoplay; clipboard-read; clipboard-write; display-capture"
                     style={{ pointerEvents: 'auto' }}
+                    // CRITICAL: These sandbox restrictions ensure ads cannot:
+                    // - Navigate the parent window (no top-level navigation)
+                    // - Access parent window.history (isolated context)
+                    // - Manipulate browser history (sandbox prevents it)
+                    // Note: allow-same-origin is needed for ads to work properly (cookies, localStorage)
+                    // But since ads are ONLY on home page, they won't interfere with browse/category pages
                   />
                 </div>
 

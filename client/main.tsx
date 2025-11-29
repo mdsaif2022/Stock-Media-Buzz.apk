@@ -3,22 +3,20 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { setupBackNavigationDetector } from "./utils/backNavigationDetector";
 
-// Load Adsterra script (replace with actual Adsterra ID)
+// DISABLED: Adsterra script loading
+// CRITICAL: We load Adsterra ads ONLY in iframes (AdsSlider component)
+// Loading the script globally allows it to manipulate browser history
+// This breaks the back button functionality
+// 
+// If you need the global script for other purposes, you can enable it,
+// but be aware it may interfere with browser navigation
 const loadAdsterraScript = () => {
-  try {
-    const script = document.createElement("script");
-    script.src = "//adsterra.com/scripts/display.js";
-    script.async = true;
-    script.onload = () => {
-      (window as any).adsterraScript?.init?.();
-    };
-    script.onerror = () => {
-      console.warn("Failed to load Adsterra script");
-    };
-    document.head.appendChild(script);
-  } catch (error) {
-    console.warn("Error loading Adsterra script:", error);
+  // DISABLED: Ads are loaded in iframes only (see AdsSlider.tsx)
+  // This prevents ad scripts from manipulating browser history
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Main] Adsterra global script disabled - ads load in iframes only');
   }
+  // Do not load the script - ads are handled by AdsSlider component in iframes
 };
 
 // Load Adsterra on app start (non-blocking)

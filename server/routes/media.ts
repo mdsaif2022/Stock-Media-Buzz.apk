@@ -338,25 +338,12 @@ export const updateMedia: RequestHandler = async (req, res) => {
   }
 };
 
-// Delete media (admin only)
+// Delete media - DISABLED: Media deletion is not allowed to ensure all uploaded content remains forever
 export const deleteMedia: RequestHandler = async (req, res) => {
-  const { id } = req.params;
-  const index = mediaDatabase.findIndex((m) => m.id === id);
-
-  if (index === -1) {
-    res.status(404).json({ error: "Media not found" });
-    return;
-  }
-
-  mediaDatabase.splice(index, 1);
-
-  try {
-    await saveMediaDatabase(mediaDatabase);
-    res.json({ message: "Media deleted successfully" });
-  } catch (error) {
-    console.error("Failed to save media:", error);
-    res.status(500).json({ error: "Failed to save media" });
-  }
+  res.status(403).json({ 
+    error: "Media deletion is not allowed",
+    message: "All uploaded content must remain permanently. Media cannot be deleted by creators or admins."
+  });
 };
 
 // Get trending media
