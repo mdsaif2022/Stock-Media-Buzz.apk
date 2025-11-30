@@ -1,11 +1,7 @@
 import { RequestHandler } from "express";
 import { Media, MediaResponse, MediaUploadRequest } from "@shared/api";
-import { promises as fs } from "fs";
-import { join } from "path";
-import { DATA_DIR } from "../utils/dataPath.js";
-
-// Path to the data file (persistent across builds)
-const MEDIA_DB_FILE = join(DATA_DIR, "media-database.json");
+import { Database } from "../utils/database.js";
+import { CloudinaryServer } from "../config/cloudinary.js";
 
 const CATEGORY_KEYS: Media["category"][] = ["video", "image", "audio", "template", "apk"];
 
@@ -132,59 +128,41 @@ const normalizeIconUrl = (value: any): string | undefined => {
   return trimmed || undefined;
 };
 
-// Load media database from file
-async function loadMediaDatabase(): Promise<Media[]> {
-  try {
-    // Ensure data directory exists
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    
-    // Try to read existing file
-    const data = await fs.readFile(MEDIA_DB_FILE, "utf-8");
-    const parsed = JSON.parse(data);
-    return Array.isArray(parsed) ? parsed : DEFAULT_MEDIA;
-  } catch (error: any) {
-    // File doesn't exist or is invalid, return default data
-    if (error.code === "ENOENT") {
-      // Save default data to file
-      await saveMediaDatabase(DEFAULT_MEDIA);
-      return DEFAULT_MEDIA;
-    }
-    console.error("Error loading media database:", error);
-    return DEFAULT_MEDIA;
-  }
-}
+// Create database instance (uses KV on Vercel, file storage on localhost)
+const mediaDatabase = new Database<Media>("media-database", DEFAULT_MEDIA);
 
-// Save media database to file
-async function saveMediaDatabase(data: Media[]): Promise<void> {
-  try {
-    // Ensure data directory exists
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    
-    // Write to file
-    await fs.writeFile(MEDIA_DB_FILE, JSON.stringify(data, null, 2), "utf-8");
-  } catch (error) {
-    console.error("Error saving media database:", error);
-    throw error;
-  }
-}
-
-// Initialize mediaDatabase - start with default data, load async
-let mediaDatabase: Media[] = [...DEFAULT_MEDIA];
-// Load database from file on startup
-loadMediaDatabase()
+// Initialize and load data on startup
+let mediaData: Media[] = [];
+mediaDatabase.load()
   .then((loaded) => {
-    mediaDatabase = loaded;
-    console.log(`Loaded ${loaded.length} media items from database`);
+    mediaData = loaded;
+    if (loaded.length > 0) {
+      console.log(`✅ Loaded ${loaded.length} media items from database`);
+    } else {
+      console.log(`📝 Media database is empty (new installation)`);
+    }
   })
   .catch((error) => {
-    console.error("Failed to load media database, using defaults:", error);
+    console.error("❌ Failed to load media database:", error);
+    // Don't use defaults - start with empty array
+    mediaData = [];
   });
 
-// Export mediaDatabase for use in upload handler
-export { mediaDatabase, saveMediaDatabase };
+// Helper functions to get and save media
+async function getMediaDatabase(): Promise<Media[]> {
+  return await mediaDatabase.load();
+}
+
+async function saveMediaDatabase(data: Media[]): Promise<void> {
+  await mediaDatabase.save(data);
+  mediaData = data;
+}
+
+// Export for use in upload handler and other modules
+export { mediaData as mediaDatabase, saveMediaDatabase, getMediaDatabase };
 
 // Get all media with pagination and filtering
-export const getMedia: RequestHandler = (req, res) => {
+export const getMedia: RequestHandler = async (req, res) => {
   const { page = 1, pageSize = 20, category, search, sort = "latest" } = req.query as {
     page?: string | number;
     pageSize?: string | number;
@@ -193,6 +171,7 @@ export const getMedia: RequestHandler = (req, res) => {
     sort?: "latest" | "popular" | "views";
   };
 
+  const mediaDatabase = await getMediaDatabase();
   let filtered = [...mediaDatabase];
 
   if (category) {
@@ -243,8 +222,9 @@ export const getMedia: RequestHandler = (req, res) => {
 };
 
 // Get single media by ID
-export const getMediaById: RequestHandler = (req, res) => {
+export const getMediaById: RequestHandler = async (req, res) => {
   const { id } = req.params;
+  const mediaDatabase = await getMediaDatabase();
   const media = mediaDatabase.find((m) => m.id === id);
 
   if (!media) {
@@ -290,6 +270,7 @@ export const createMedia: RequestHandler = async (req, res) => {
     showScreenshots,
   };
 
+  const mediaDatabase = await getMediaDatabase();
   mediaDatabase.push(newMedia);
 
   try {
@@ -304,6 +285,7 @@ export const createMedia: RequestHandler = async (req, res) => {
 // Update media (admin only)
 export const updateMedia: RequestHandler = async (req, res) => {
   const { id } = req.params;
+  const mediaDatabase = await getMediaDatabase();
   const media = mediaDatabase.find((m) => m.id === id);
 
   if (!media) {
@@ -347,7 +329,8 @@ export const deleteMedia: RequestHandler = async (req, res) => {
 };
 
 // Get trending media
-export const getTrendingMedia: RequestHandler = (req, res) => {
+export const getTrendingMedia: RequestHandler = async (req, res) => {
+  const mediaDatabase = await getMediaDatabase();
   const trending = [...mediaDatabase]
     .sort((a, b) => b.downloads - a.downloads)
     .slice(0, 10);
@@ -355,7 +338,8 @@ export const getTrendingMedia: RequestHandler = (req, res) => {
   res.json(trending);
 };
 
-export const getCategorySummary: RequestHandler = (_req, res) => {
+export const getCategorySummary: RequestHandler = async (_req, res) => {
+  const mediaDatabase = await getMediaDatabase();
   const summary = CATEGORY_KEYS.map((category) => {
     const items = mediaDatabase.filter((item) => normalizeCategoryValue(item.category) === category);
     const latest =
@@ -374,4 +358,319 @@ export const getCategorySummary: RequestHandler = (_req, res) => {
   });
 
   res.json(summary);
+};
+
+// Test Cloudinary connection
+export const testCloudinary: RequestHandler = async (_req, res) => {
+  try {
+    const cloudinaryModule = await import("../config/cloudinary.js");
+    const { listCloudinaryResources, getCloudinaryConfig } = cloudinaryModule;
+    
+    const results: any = {
+      success: true,
+      servers: {},
+    };
+    
+    const servers: Array<{ server: "server1" | "server2" | "server3"; account: number }> = [
+      { server: "server1", account: 1 },
+      { server: "server2", account: 2 },
+      { server: "server3", account: 3 },
+    ];
+    
+    for (const { server, account } of servers) {
+      try {
+        const config = getCloudinaryConfig(server);
+        console.log(`Testing ${server}...`);
+        
+        // Try to list first 1 resource as a test
+        const testResult = await listCloudinaryResources(server, {
+          resource_type: "image",
+          max_results: 1,
+        });
+        
+        results.servers[server] = {
+          connected: true,
+          cloud_name: config.cloud_name,
+          hasResources: testResult.resources.length > 0,
+          resourceCount: testResult.resources.length,
+        };
+      } catch (error: any) {
+        results.servers[server] = {
+          connected: false,
+          error: error.message,
+        };
+      }
+    }
+    
+    res.json(results);
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+};
+
+// Diagnostic endpoint to check database status (admin only)
+export const getDatabaseStatus: RequestHandler = async (_req, res) => {
+  try {
+    const mediaDatabase = await getMediaDatabase();
+    const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+    const hasKV = !!process.env.KV_URL;
+    
+    res.json({
+      status: "ok",
+      storage: {
+        type: hasKV ? "Vercel KV" : isVercel ? "⚠️ None (KV not configured)" : "File Storage",
+        isVercel,
+        hasKV,
+        kvUrl: hasKV ? "✅ Set" : "❌ Not set",
+      },
+      media: {
+        count: mediaDatabase.length,
+        items: mediaDatabase.slice(0, 5).map(m => ({ id: m.id, title: m.title })),
+      },
+      message: hasKV 
+        ? "✅ Database configured correctly" 
+        : isVercel 
+          ? "⚠️ KV not configured - data will not persist!" 
+          : "📁 Using file storage (localhost)",
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      status: "error",
+      error: error.message,
+    });
+  }
+};
+
+// Sync media from Cloudinary - Rebuilds database from Cloudinary files
+export const syncFromCloudinary: RequestHandler = async (req, res) => {
+  try {
+    console.log("🔄 Starting Cloudinary sync...");
+    
+    // Import Cloudinary functions
+    let listAllCloudinaryResources: any;
+    try {
+      const cloudinaryModule = await import("../config/cloudinary.js");
+      listAllCloudinaryResources = cloudinaryModule.listAllCloudinaryResources;
+      
+      if (!listAllCloudinaryResources) {
+        throw new Error("listAllCloudinaryResources function not found");
+      }
+      console.log("✅ Cloudinary module loaded successfully");
+    } catch (importError: any) {
+      console.error("❌ Failed to import Cloudinary functions:", importError);
+      console.error("Stack:", importError.stack);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to load Cloudinary module",
+        message: importError.message,
+        details: "Check server logs for more information",
+        stack: process.env.NODE_ENV === "development" ? importError.stack : undefined,
+      });
+    }
+    
+    // List all resources from all Cloudinary accounts
+    let allResources: Array<{ resource: any; server: CloudinaryServer; account: number }> = [];
+    try {
+      console.log("📡 Fetching resources from Cloudinary...");
+      console.log("   This may take a while if you have many files...");
+      
+      allResources = await listAllCloudinaryResources();
+      
+      console.log(`📦 Found ${allResources.length} total files in Cloudinary`);
+      
+      if (allResources.length === 0) {
+        console.log("⚠️  WARNING: No resources found. Check:");
+        console.log("   1. Cloudinary credentials are correct");
+        console.log("   2. Files exist in your Cloudinary accounts");
+        console.log("   3. Files are in the 'upload' type (not derived)");
+      }
+    } catch (cloudinaryError: any) {
+      console.error("❌ Error fetching from Cloudinary:", cloudinaryError);
+      console.error("Error details:", {
+        message: cloudinaryError.message,
+        http_code: cloudinaryError.http_code,
+        name: cloudinaryError.name,
+      });
+      
+      // Provide helpful error messages
+      let errorDetails = "Check Cloudinary credentials in server/config/cloudinary.ts";
+      if (cloudinaryError.http_code === 401) {
+        errorDetails = "Cloudinary authentication failed - check API key and secret";
+      } else if (cloudinaryError.http_code === 404) {
+        errorDetails = "Cloudinary account not found - check cloud name";
+      }
+      
+      return res.status(500).json({
+        success: false,
+        error: "Failed to fetch resources from Cloudinary",
+        message: cloudinaryError.message,
+        http_code: cloudinaryError.http_code,
+        details: errorDetails,
+        suggestion: "Test connection first: GET /api/media/test-cloudinary",
+      });
+    }
+    
+    if (allResources.length === 0) {
+      console.log("⚠️  No resources found in Cloudinary");
+      return res.json({
+        success: true,
+        message: "No files found in Cloudinary to sync",
+        stats: {
+          totalInCloudinary: 0,
+          existingInDatabase: 0,
+          newItemsAdded: 0,
+          skipped: 0,
+          totalInDatabase: 0,
+        },
+      });
+    }
+    
+    // Get existing database
+    console.log("📚 Loading existing database...");
+    let existingDatabase: Media[] = [];
+    try {
+      existingDatabase = await getMediaDatabase();
+      console.log(`📚 Found ${existingDatabase.length} existing items in database`);
+    } catch (dbError: any) {
+      console.error("⚠️  Error loading database (continuing anyway):", dbError);
+      existingDatabase = [];
+    }
+    
+    const existingUrls = new Set(existingDatabase.map(m => m.fileUrl));
+    
+    // Create media entries for each Cloudinary resource
+    const newMediaItems: Media[] = [];
+    let skipped = 0;
+    let created = 0;
+    
+    console.log("🔄 Processing resources...");
+    for (const { resource, server, account } of allResources) {
+      // Skip if already in database
+      if (existingUrls.has(resource.secure_url)) {
+        skipped++;
+        continue;
+      }
+      
+      // Determine category from resource type
+      let category: Media["category"] = "video";
+      if (resource.resource_type === "image") {
+        category = "image";
+      } else if (resource.resource_type === "video") {
+        category = "video";
+      } else if (resource.resource_type === "raw") {
+        // Check if it's an APK
+        const filename = resource.filename || resource.public_id || "";
+        const isApk = filename.toLowerCase().endsWith(".apk") || filename.toLowerCase().endsWith(".xapk");
+        category = isApk ? "apk" : "audio";
+      }
+      
+      // Determine type
+      let type = resource.format?.toUpperCase() || resource.resource_type.toUpperCase();
+      if (category === "apk") {
+        type = "Android APK";
+      }
+      
+      // Calculate file size
+      const bytes = resource.bytes || 0;
+      const fileSizeMB = (bytes / (1024 * 1024)).toFixed(2);
+      const fileSize = parseFloat(fileSizeMB) > 1024 
+        ? `${(parseFloat(fileSizeMB) / 1024).toFixed(2)} GB` 
+        : `${fileSizeMB} MB`;
+      
+      // Get duration for videos
+      const duration = resource.duration 
+        ? `${Math.floor(resource.duration / 60)}:${String(Math.floor(resource.duration % 60)).padStart(2, '0')}`
+        : undefined;
+      
+      // Create media entry
+      // Use resource.public_id + account to ensure unique IDs
+      const uniqueId = `${account}_${resource.public_id}_${resource.created_at || Date.now()}`;
+      const mediaItem: Media = {
+        id: uniqueId.replace(/[^a-zA-Z0-9_-]/g, '_'), // Sanitize ID
+        title: resource.filename || resource.public_id?.split('/').pop() || `Media from ${server}`,
+        description: `Synced from Cloudinary - ${resource.resource_type}`,
+        category,
+        type,
+        fileSize,
+        duration,
+        previewUrl: resource.secure_url,
+        fileUrl: resource.secure_url,
+        tags: [],
+        downloads: 0,
+        views: 0,
+        isPremium: false,
+        uploadedBy: "System Sync",
+        uploadedByEmail: undefined,
+        uploadedDate: resource.created_at 
+          ? new Date(resource.created_at).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        cloudinaryAccount: account,
+      };
+      
+      newMediaItems.push(mediaItem);
+      created++;
+    }
+    
+    console.log(`✅ Processed ${allResources.length} resources: ${created} new, ${skipped} skipped`);
+    
+    // Merge with existing database (avoid duplicates by URL)
+    const mergedDatabase = [...existingDatabase];
+    
+    for (const newItem of newMediaItems) {
+      // Check if URL already exists
+      if (!existingUrls.has(newItem.fileUrl)) {
+        mergedDatabase.push(newItem);
+        existingUrls.add(newItem.fileUrl); // Update set to prevent duplicates in same batch
+      }
+    }
+    
+    console.log(`💾 Saving ${mergedDatabase.length} items to database...`);
+    
+    // Save to database
+    try {
+      await saveMediaDatabase(mergedDatabase);
+      console.log(`✅ Database saved successfully`);
+    } catch (saveError: any) {
+      console.error("❌ Error saving database:", saveError);
+      return res.status(500).json({
+        success: false,
+        error: "Failed to save database",
+        message: saveError.message,
+        stats: {
+          totalInCloudinary: allResources.length,
+          existingInDatabase: existingDatabase.length,
+          newItemsAdded: created,
+          skipped: skipped,
+          totalInDatabase: mergedDatabase.length,
+        },
+        warning: "Files were processed but not saved. Check storage configuration.",
+      });
+    }
+    
+    console.log(`✅ Sync complete: ${created} new items added, ${skipped} skipped (already exists)`);
+    
+    res.json({
+      success: true,
+      message: `Synced ${created} new media items from Cloudinary`,
+      stats: {
+        totalInCloudinary: allResources.length,
+        existingInDatabase: existingDatabase.length,
+        newItemsAdded: created,
+        skipped: skipped,
+        totalInDatabase: mergedDatabase.length,
+      },
+    });
+  } catch (error: any) {
+    console.error("❌ Unexpected sync error:", error);
+    console.error("Stack:", error.stack);
+    res.status(500).json({
+      success: false,
+      error: "Unexpected error during sync",
+      message: error.message,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
+    });
+  }
 };

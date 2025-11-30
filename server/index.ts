@@ -11,6 +11,10 @@ import * as settingsRoutes from "./routes/settings.js";
 import * as usersRoutes from "./routes/users.js";
 import * as popupAdsRoutes from "./routes/popup-ads.js";
 import { handleFileUpload, handleUrlUpload, upload, handleAssetUpload } from "./routes/upload.js";
+import { initializeKV } from "./utils/database.js";
+
+// Initialize database connection (KV on Vercel, file storage on localhost)
+initializeKV().catch(console.error);
 
 export function createServer() {
   const app = express();
@@ -87,6 +91,10 @@ export function createServer() {
   app.get("/api/media", mediaRoutes.getMedia);
   app.get("/api/media/trending", mediaRoutes.getTrendingMedia);
   app.get("/api/media/categories/summary", mediaRoutes.getCategorySummary);
+  app.get("/api/media/database/status", mediaRoutes.getDatabaseStatus); // Diagnostic endpoint
+  app.get("/api/media/test-cloudinary", mediaRoutes.testCloudinary); // Test Cloudinary connection
+  app.post("/api/media/sync-cloudinary", mediaRoutes.syncFromCloudinary); // Sync from Cloudinary
+  app.get("/api/media/sync-cloudinary", mediaRoutes.syncFromCloudinary); // Sync from Cloudinary (GET for easy testing)
   app.get("/api/media/preview/:mediaId", downloadRoutes.proxyVideoPreview); // Video preview proxy (before :id route)
   app.get("/api/media/:id", mediaRoutes.getMediaById);
   app.post("/api/media", mediaRoutes.createMedia); // Admin only

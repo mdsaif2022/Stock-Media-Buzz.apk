@@ -1,7 +1,7 @@
 import { RequestHandler } from "express";
 import multer from "multer";
 import { uploadToCloudinary, CloudinaryServer } from "../config/cloudinary.js";
-import { mediaDatabase, saveMediaDatabase } from "./media.js";
+import { saveMediaDatabase, getMediaDatabase } from "./media.js";
 import { Media } from "@shared/api";
 import { canCreatorConsumeStorage, incrementCreatorStorageUsage } from "./creators.js";
 
@@ -196,12 +196,15 @@ export const handleFileUpload: RequestHandler = async (req, res) => {
         showScreenshots,
       };
 
-      mediaDatabase.push(newMedia);
       return newMedia;
     });
 
-    // Save to file
-    await saveMediaDatabase(mediaDatabase);
+    // Get current database and add new items
+    const currentDatabase = await getMediaDatabase();
+    currentDatabase.push(...savedMedia);
+
+    // Save to database (KV on Vercel, file on localhost)
+    await saveMediaDatabase(currentDatabase);
 
     if (creatorId) {
       await incrementCreatorStorageUsage(creatorId, totalUploadBytes);
@@ -290,10 +293,12 @@ export const handleUrlUpload: RequestHandler = async (req, res) => {
       showScreenshots,
     };
 
-    mediaDatabase.push(newMedia);
+    // Get current database and add new item
+    const currentDatabase = await getMediaDatabase();
+    currentDatabase.push(newMedia);
 
-    // Save to file
-    await saveMediaDatabase(mediaDatabase);
+    // Save to database (KV on Vercel, file on localhost)
+    await saveMediaDatabase(currentDatabase);
 
     res.json({
       success: true,

@@ -137,3 +137,108 @@ export function getCloudinaryUrl(publicId: string, server: CloudinaryServer): st
   return `https://res.cloudinary.com/${config.cloud_name}/${config.api_key === "255731855284435" ? "image" : "video"}/upload/${publicId}`;
 }
 
+/**
+ * List all resources from Cloudinary
+ */
+export async function listCloudinaryResources(
+  server: CloudinaryServer = "auto",
+  options: {
+    resource_type?: "image" | "video" | "raw" | "auto";
+    max_results?: number;
+    next_cursor?: string;
+  } = {}
+): Promise<{
+  resources: any[];
+  next_cursor?: string;
+}> {
+  const config = getCloudinaryConfig(server);
+  cloudinary.config(config);
+  
+  const { resource_type = "image", max_results = 500, next_cursor } = options;
+  
+  try {
+    // Use admin API to list resources
+    // Try to get all files including those in folders
+    const result = await cloudinary.api.resources({
+      resource_type: resource_type === "raw" ? "raw" : resource_type,
+      type: "upload", // Only uploaded files, not derived
+      max_results,
+      next_cursor,
+      // Include all folders by not specifying a folder
+      // This will get files from root and all subfolders
+    });
+    
+    return {
+      resources: result.resources || [],
+      next_cursor: result.next_cursor,
+    };
+  } catch (error) {
+    console.error(`Error listing resources from ${server}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * List all resources from all Cloudinary accounts
+ */
+export async function listAllCloudinaryResources(): Promise<Array<{
+  resource: any;
+  server: CloudinaryServer;
+  account: number;
+}>> {
+  const servers: Array<{ server: CloudinaryServer; account: number }> = [
+    { server: "server1", account: 1 },
+    { server: "server2", account: 2 },
+    { server: "server3", account: 3 },
+  ];
+  
+  const allResources: Array<{ resource: any; server: CloudinaryServer; account: number }> = [];
+  
+  for (const { server, account } of servers) {
+    try {
+      const resourceTypes: Array<"image" | "video" | "raw"> = ["image", "video", "raw"];
+      
+      for (const resourceType of resourceTypes) {
+        let nextCursor: string | undefined;
+        let hasMore = true;
+        let pageCount = 0;
+        
+        while (hasMore && pageCount < 10) { // Limit to 10 pages per type to avoid timeouts
+          try {
+            const result = await listCloudinaryResources(server, {
+              resource_type: resourceType,
+              max_results: 500,
+              next_cursor: nextCursor,
+            });
+            
+            result.resources.forEach((resource) => {
+              allResources.push({ resource, server, account });
+            });
+            
+            nextCursor = result.next_cursor;
+            hasMore = !!nextCursor;
+            pageCount++;
+            
+            if (result.resources.length === 0) {
+              hasMore = false;
+            }
+          } catch (error) {
+            console.error(`Error fetching ${resourceType} from ${server} (page ${pageCount}):`, error);
+            hasMore = false;
+          }
+        }
+        
+        const count = allResources.filter(r => r.server === server && r.resource.resource_type === resourceType).length;
+        if (count > 0) {
+          console.log(`  ✅ ${count} ${resourceType} files from ${server}`);
+        }
+      }
+    } catch (error) {
+      console.error(`❌ Error listing from ${server}:`, error);
+    }
+  }
+  
+  console.log(`📦 Total resources found: ${allResources.length}`);
+  return allResources;
+}
+
