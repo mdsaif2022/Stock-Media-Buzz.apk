@@ -7,25 +7,60 @@ import { promises as fs } from "fs";
 import { join } from "path";
 import { DATA_DIR } from "./dataPath.js";
 
-// Lazy-load Vercel KV (only available in Vercel environment)
-let kv: any = null;
-let kvInitialized = false;
+// Lazy-load Upstash Redis (for Vercel KV/Upstash Redis)
+let redis: any = null;
+let redisInitialized = false;
 
-async function getKV() {
-  if (kvInitialized) return kv;
-  kvInitialized = true;
+async function getRedis() {
+  if (redisInitialized) return redis;
+  redisInitialized = true;
   
-  // Check for KV_URL or STORAGE_URL (in case user set custom prefix)
-  const kvUrl = process.env.KV_URL || process.env.STORAGE_URL;
+  // Check for Upstash Redis environment variables
+  // Upstash Redis SDK reads from: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN
+  // Vercel KV uses: KV_URL (or STORAGE_URL if custom prefix) + KV_REST_API_URL + KV_REST_API_TOKEN
+  const hasUpstashEnv = process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN;
+  const hasVercelKV = process.env.KV_URL || process.env.STORAGE_URL;
+  const hasVercelKVFull = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
   
-  if (kvUrl) {
+  if (hasUpstashEnv) {
+    try {
+      // Use Upstash Redis SDK (recommended for Upstash Redis)
+      const { Redis } = await import("@upstash/redis");
+      redis = Redis.fromEnv();
+      return redis;
+    } catch (error) {
+      console.error("Failed to initialize Upstash Redis:", error);
+      return null;
+    }
+  } else if (hasVercelKVFull) {
+    try {
+      // Try to use Upstash Redis SDK with Vercel KV env vars
+      // Map Vercel KV env vars to Upstash format
+      const { Redis } = await import("@upstash/redis");
+      redis = new Redis({
+        url: process.env.KV_REST_API_URL || process.env.STORAGE_REST_API_URL,
+        token: process.env.KV_REST_API_TOKEN || process.env.STORAGE_REST_API_TOKEN,
+      });
+      return redis;
+    } catch (error) {
+      // Fallback to @vercel/kv if Upstash SDK fails
+      try {
+        const kvModule = await import("@vercel/kv");
+        redis = kvModule.kv;
+        return redis;
+      } catch (kvError) {
+        console.log("Redis/KV not available, using file storage");
+        return null;
+      }
+    }
+  } else if (hasVercelKV) {
+    // Try @vercel/kv as fallback
     try {
       const kvModule = await import("@vercel/kv");
-      kv = kvModule.kv;
-      return kv;
-    } catch (error) {
-      // KV not available (not installed or not configured)
-      console.log("Vercel KV not available, using file storage");
+      redis = kvModule.kv;
+      return redis;
+    } catch (kvError) {
+      console.log("Redis/KV not available, using file storage");
       return null;
     }
   }
@@ -33,15 +68,17 @@ async function getKV() {
 }
 
 /**
- * Determine if we should use KV storage
- * Use KV if:
- * 1. We're in a Vercel environment (KV_URL is set)
- * 2. KV client is available
+ * Determine if we should use Redis/KV storage
+ * Use Redis/KV if:
+ * 1. Upstash Redis env vars are set (UPSTASH_REDIS_REST_URL)
+ * 2. OR Vercel KV env vars are set (KV_URL or STORAGE_URL)
+ * 3. AND Redis client is available
  */
 async function shouldUseKV(): Promise<boolean> {
-  const kvClient = await getKV();
-  const kvUrl = process.env.KV_URL || process.env.STORAGE_URL;
-  return !!(kvUrl && kvClient);
+  const redisClient = await getRedis();
+  const hasUpstashEnv = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  const hasVercelKV = !!(process.env.KV_URL || process.env.STORAGE_URL);
+  return !!(redisClient && (hasUpstashEnv || hasVercelKV));
 }
 
 /**
@@ -63,9 +100,9 @@ export class Database<T> {
     const useKV = await shouldUseKV();
     if (useKV) {
       try {
-        const kvClient = await getKV();
-        if (!kvClient) throw new Error("KV client not available");
-        const data = await kvClient.get<T[]>(this.key);
+        const redisClient = await getRedis();
+        if (!redisClient) throw new Error("Redis client not available");
+        const data = await redisClient.get<T[]>(this.key);
         
         // If KV returns null/undefined, return empty array (not defaults)
         // This means the database is empty, not that there was an error
@@ -110,10 +147,10 @@ export class Database<T> {
     const useKV = await shouldUseKV();
     if (useKV) {
       try {
-        const kvClient = await getKV();
-        if (!kvClient) throw new Error("KV client not available");
-        await kvClient.set(this.key, data);
-        console.log(`✅ Saved ${data.length} items to KV (${this.key})`);
+        const redisClient = await getRedis();
+        if (!redisClient) throw new Error("Redis client not available");
+        await redisClient.set(this.key, data);
+        console.log(`✅ Saved ${data.length} items to Redis/KV (${this.key})`);
       } catch (error) {
         console.error(`❌ Error saving to KV (${this.key}):`, error);
         // On Vercel, don't fall back to file storage - throw error
@@ -227,34 +264,36 @@ export class Database<T> {
 }
 
 /**
- * Initialize KV connection (for Vercel)
+ * Initialize Redis/KV connection (for Vercel/Upstash)
  */
 export async function initializeKV() {
-  const kvClient = await getKV();
+  const redisClient = await getRedis();
   const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
-  const kvUrl = process.env.KV_URL || process.env.STORAGE_URL;
+  const hasUpstashEnv = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  const hasVercelKV = !!(process.env.KV_URL || process.env.STORAGE_URL);
   
-  if (kvClient && kvUrl) {
+  if (redisClient && (hasUpstashEnv || hasVercelKV)) {
     try {
       // Test connection by setting a test key
-      await kvClient.set("__test__", "ok");
-      await kvClient.del("__test__");
-      console.log("✅ Connected to Vercel KV - Data will persist");
+      await redisClient.set("__test__", "ok");
+      await redisClient.del("__test__");
+      const redisType = hasUpstashEnv ? "Upstash Redis" : "Vercel KV";
+      console.log(`✅ Connected to ${redisType} - Data will persist`);
     } catch (error) {
-      console.error("❌ Failed to connect to Vercel KV:", error);
+      console.error("❌ Failed to connect to Redis/KV:", error);
       if (isVercel) {
-        console.error("⚠️  CRITICAL: On Vercel but KV connection failed! Data will not persist.");
-        console.error("⚠️  Please check your KV configuration in Vercel Dashboard.");
+        console.error("⚠️  CRITICAL: On Vercel but Redis/KV connection failed! Data will not persist.");
+        console.error("⚠️  Please check your Upstash Redis configuration in Vercel Dashboard.");
       } else {
         console.log("⚠️  Falling back to file storage");
       }
     }
   } else {
     if (isVercel) {
-      console.error("⚠️  ⚠️  ⚠️  WARNING: Running on Vercel but KV_URL is not set!");
-      console.error("⚠️  Your data will NOT persist. Please set up Vercel KV:");
-      console.error("⚠️  1. Go to Vercel Dashboard → Storage → Create Database → KV");
-      console.error("⚠️  2. Link it to your project");
+      console.error("⚠️  ⚠️  ⚠️  WARNING: Running on Vercel but Redis/KV is not configured!");
+      console.error("⚠️  Your data will NOT persist. Please set up Upstash Redis:");
+      console.error("⚠️  1. Go to Vercel Dashboard → Marketplace → Upstash Redis");
+      console.error("⚠️  2. Add to your project");
       console.error("⚠️  3. Redeploy");
     } else {
       console.log("📁 Using file storage (localhost mode)");

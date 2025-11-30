@@ -416,14 +416,22 @@ export const getDatabaseStatus: RequestHandler = async (_req, res) => {
   try {
     const mediaDatabase = await getMediaDatabase();
     const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
-    const hasKV = !!(process.env.KV_URL || process.env.STORAGE_URL);
+    const hasUpstashEnv = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+    const hasVercelKV = !!(process.env.KV_URL || process.env.STORAGE_URL);
+    const hasKV = hasUpstashEnv || hasVercelKV;
     
     res.json({
       status: "ok",
       storage: {
-        type: hasKV ? "Vercel KV" : isVercel ? "⚠️ None (KV not configured)" : "File Storage",
+        type: hasKV 
+          ? (hasUpstashEnv ? "Upstash Redis" : "Vercel KV")
+          : isVercel 
+            ? "⚠️ None (Redis/KV not configured)" 
+            : "File Storage",
         isVercel,
         hasKV,
+        hasUpstashRedis: hasUpstashEnv,
+        hasVercelKV: hasVercelKV,
         kvUrl: hasKV ? "✅ Set" : "❌ Not set",
       },
       media: {
@@ -654,8 +662,14 @@ export const syncFromCloudinary: RequestHandler = async (req, res) => {
     
     // Check storage type for user info
     const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
-    const hasKV = !!(process.env.KV_URL || process.env.STORAGE_URL);
-    const storageType = hasKV ? "Vercel KV" : isVercel ? "⚠️ Temporary (KV not configured)" : "File Storage";
+    const hasUpstashEnv = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+    const hasVercelKV = !!(process.env.KV_URL || process.env.STORAGE_URL);
+    const hasKV = hasUpstashEnv || hasVercelKV;
+    const storageType = hasKV 
+      ? (hasUpstashEnv ? "Upstash Redis" : "Vercel KV")
+      : isVercel 
+        ? "⚠️ Temporary (Redis/KV not configured)" 
+        : "File Storage";
     
     res.json({
       success: true,
@@ -664,8 +678,10 @@ export const syncFromCloudinary: RequestHandler = async (req, res) => {
         type: storageType,
         isVercel,
         hasKV,
+        hasUpstashRedis: hasUpstashEnv,
+        hasVercelKV: hasVercelKV,
         note: isVercel && !hasKV 
-          ? "⚠️ Files saved but will disappear! Create KV via Marketplace to persist." 
+          ? "⚠️ Files saved but will disappear! Add Upstash Redis via Marketplace to persist." 
           : hasKV 
             ? "✅ Files will persist permanently" 
             : "📁 Files saved to local storage",
