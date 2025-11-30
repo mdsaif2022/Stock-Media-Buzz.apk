@@ -416,7 +416,7 @@ export const getDatabaseStatus: RequestHandler = async (_req, res) => {
   try {
     const mediaDatabase = await getMediaDatabase();
     const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
-    const hasKV = !!process.env.KV_URL;
+    const hasKV = !!(process.env.KV_URL || process.env.STORAGE_URL);
     
     res.json({
       status: "ok",
@@ -652,9 +652,24 @@ export const syncFromCloudinary: RequestHandler = async (req, res) => {
     
     console.log(`✅ Sync complete: ${created} new items added, ${skipped} skipped (already exists)`);
     
+    // Check storage type for user info
+    const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+    const hasKV = !!(process.env.KV_URL || process.env.STORAGE_URL);
+    const storageType = hasKV ? "Vercel KV" : isVercel ? "⚠️ Temporary (KV not configured)" : "File Storage";
+    
     res.json({
       success: true,
       message: `Synced ${created} new media items from Cloudinary`,
+      storage: {
+        type: storageType,
+        isVercel,
+        hasKV,
+        note: isVercel && !hasKV 
+          ? "⚠️ Files saved but will disappear! Create KV via Marketplace to persist." 
+          : hasKV 
+            ? "✅ Files will persist permanently" 
+            : "📁 Files saved to local storage",
+      },
       stats: {
         totalInCloudinary: allResources.length,
         existingInDatabase: existingDatabase.length,

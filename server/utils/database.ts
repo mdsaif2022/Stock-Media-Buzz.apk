@@ -15,7 +15,10 @@ async function getKV() {
   if (kvInitialized) return kv;
   kvInitialized = true;
   
-  if (process.env.KV_URL) {
+  // Check for KV_URL or STORAGE_URL (in case user set custom prefix)
+  const kvUrl = process.env.KV_URL || process.env.STORAGE_URL;
+  
+  if (kvUrl) {
     try {
       const kvModule = await import("@vercel/kv");
       kv = kvModule.kv;
@@ -37,7 +40,8 @@ async function getKV() {
  */
 async function shouldUseKV(): Promise<boolean> {
   const kvClient = await getKV();
-  return !!(process.env.KV_URL && kvClient);
+  const kvUrl = process.env.KV_URL || process.env.STORAGE_URL;
+  return !!(kvUrl && kvClient);
 }
 
 /**
@@ -228,8 +232,9 @@ export class Database<T> {
 export async function initializeKV() {
   const kvClient = await getKV();
   const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+  const kvUrl = process.env.KV_URL || process.env.STORAGE_URL;
   
-  if (kvClient && process.env.KV_URL) {
+  if (kvClient && kvUrl) {
     try {
       // Test connection by setting a test key
       await kvClient.set("__test__", "ok");

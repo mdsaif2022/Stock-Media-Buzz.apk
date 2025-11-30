@@ -17,13 +17,19 @@ We've implemented a database abstraction layer that uses:
 
 ### Step 1: Create Vercel KV Database
 
+**IMPORTANT:** Vercel has moved KV to the Marketplace. Follow these steps:
+
 1. Go to your Vercel project dashboard
 2. Navigate to **Storage** tab
-3. Click **Create Database**
-4. Select **KV** (Redis)
-5. Choose a name (e.g., `stock-media-kv`)
-6. Select a region (closest to your users)
-7. Click **Create**
+3. Click **Create New**
+4. You'll see "Edge Config" and "Blob" options
+5. **Look for "Marketplace Database Providers"** section (scroll down)
+6. Click on **KV** option in the Marketplace section
+7. Or go directly to: **Marketplace** → Search for **"KV"** or **"Redis"**
+8. Click **Add Integration** or **Create**
+9. Choose a name (e.g., `stock-media-kv`)
+10. Select a region (closest to your users)
+11. Click **Create** or **Add**
 
 ### Step 2: Link KV to Your Project
 
