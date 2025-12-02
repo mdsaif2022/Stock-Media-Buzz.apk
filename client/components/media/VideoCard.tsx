@@ -4,6 +4,9 @@ import { Play, Video } from "lucide-react";
 import { Media } from "@shared/api";
 import { useVideoThumbnail } from "@/hooks/useVideoThumbnail";
 import { useInView } from "@/hooks/useInView";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useMobileAutoplay } from "@/hooks/useMobileAutoplay";
+import { activateVideo, deactivateVideo, registerVideo, unregisterVideo } from "@/utils/videoManager";
 import { cn } from "@/lib/utils";
 
 interface VideoCardProps {
@@ -21,6 +24,12 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
   const videoRef = useRef<HTMLVideoElement>(null);
   const isInView = useInView(cardRef, { threshold: 0.4 });
   const supportsHover = useSupportsHover();
+  const isMobile = useIsMobile();
+
+  // Mobile autoplay detection - triggers when video enters center viewport
+  const shouldMobileAutoplay = useMobileAutoplay(cardRef, isMobile && !supportsHover, {
+    threshold: 0.5, // 50% of video must be visible
+  });
 
   const [isHovering, setIsHovering] = useState(false);
   const [isPreviewReady, setIsPreviewReady] = useState(false);
@@ -58,10 +67,14 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
     : "";
 
   // Determine if video should be loaded and visible
-  // YouTube-style: Show video when hovering (with smooth transition)
-  const shouldShowVideo = isHovering && supportsHover && videoUrl && !previewError;
+  // Desktop: Show video when hovering (YouTube-style)
+  // Mobile: Show video when in center viewport (autoplay)
+  const shouldShowVideo = videoUrl && !previewError && (
+    (supportsHover && isHovering) || // Desktop hover
+    (isMobile && !supportsHover && shouldMobileAutoplay) // Mobile autoplay
+  );
   
-  // Preload video metadata when in view (even if not hovering) for faster hover response
+  // Preload video metadata when in view (even if not hovering/autoplaying) for faster response
   const shouldPreloadVideo = isInView && videoUrl && !previewError;
 
   // Store thumbnail in ref to prevent it from disappearing
@@ -93,13 +106,32 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
     return source;
   }, [thumbnailUrl, thumbnailError]);
 
-  // Monitor video playback and pause at PREVIEW_DURATION (YouTube-style)
+  // Register video with global manager for single-playback control
+  useEffect(() => {
+    if (!isVideo || !videoUrl) return;
+
+    const pauseCallback = () => {
+      const video = videoRef.current;
+      if (video) {
+        video.pause();
+        setIsPreviewReady(false);
+      }
+    };
+
+    registerVideo(media.id, pauseCallback);
+
+    return () => {
+      unregisterVideo(media.id);
+    };
+  }, [media.id, isVideo, videoUrl]);
+
+  // Monitor video playback and pause at PREVIEW_DURATION (desktop hover only)
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !supportsHover || !isVideo) return;
+    if (!video || !supportsHover || !isVideo || isMobile) return;
 
     const handleTimeUpdate = () => {
-      // Pause video at PREVIEW_DURATION seconds (don't reset isHovering - keep hover state)
+      // Pause video at PREVIEW_DURATION seconds (desktop hover preview)
       if (video.currentTime >= PREVIEW_DURATION) {
         video.pause();
         // Keep video at PREVIEW_DURATION (don't reset to 0) for smooth UX
@@ -110,7 +142,7 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
     return () => {
       video.removeEventListener("timeupdate", handleTimeUpdate);
     };
-  }, [supportsHover, isVideo]);
+  }, [supportsHover, isVideo, isMobile]);
 
   // Set video source early (when in view) to allow preloading metadata
   useEffect(() => {
@@ -136,38 +168,56 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
     };
   }, [shouldPreloadVideo, videoUrl, isVideo]);
 
-  // YouTube-style hover preview: Play video on hover, pause on hover-out
+  // Play/pause video based on hover (desktop) or viewport (mobile)
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !isVideo || !videoUrl) return;
 
     if (shouldShowVideo) {
-      // HOVERING: Start playing video preview
+      // Should play: Desktop hover OR mobile autoplay
       const tryPlay = async () => {
         try {
-          // Reset to start for fresh preview
+          // Activate this video in global manager (pauses others)
+          activateVideo(media.id);
+          
+          // Reset to start for fresh preview on both desktop and mobile
+          // This ensures users always see the beginning when interacting with a video
           video.currentTime = 0;
+          
+          // Ensure video has required attributes for mobile autoplay
+          video.muted = true;
+          video.playsInline = true;
           
           // If video has enough data, play immediately
           if (video.readyState >= 2) { // HAVE_CURRENT_DATA
             setIsPreviewReady(true);
-            await video.play().catch(() => {
+            await video.play().catch((err) => {
               // Autoplay blocked - show thumbnail instead
               setPreviewError(false); // Don't mark as error, just can't autoplay
+              deactivateVideo(media.id);
+              if (process.env.NODE_ENV === 'development') {
+                console.warn("Video autoplay blocked:", err);
+              }
             });
           } else {
             // Wait for video to load, then play
             const handleCanPlay = async () => {
               try {
+                // Always start from beginning for consistent preview experience
                 video.currentTime = 0;
                 setIsPreviewReady(true);
-                await video.play().catch(() => {
+                await video.play().catch((err) => {
                   // Autoplay blocked - show thumbnail instead
+                  deactivateVideo(media.id);
+                  if (process.env.NODE_ENV === 'development') {
+                    console.warn("Video autoplay blocked:", err);
+                  }
                 });
               } catch (err) {
                 // Silently handle autoplay errors
+                deactivateVideo(media.id);
                 if (process.env.NODE_ENV === 'development') {
-                  console.warn("Video autoplay blocked:", err);
+                  console.warn("Video play error:", err);
                 }
               }
             };
@@ -179,6 +229,7 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
           }
         } catch (err) {
           // Silently handle errors
+          deactivateVideo(media.id);
           if (process.env.NODE_ENV === 'development') {
             console.warn("Video play error:", err);
           }
@@ -193,12 +244,17 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
       // Try to play
       tryPlay();
     } else {
-      // NOT HOVERING: Pause and reset to thumbnail
+      // Should pause: Not hovering (desktop) OR left center viewport (mobile)
+      deactivateVideo(media.id);
       video.pause();
-      video.currentTime = 0;
+      
+      // Reset preview state
       setIsPreviewReady(false);
+      
+      // Note: We don't reset currentTime here to allow for smoother resume if user scrolls back
+      // However, we do reset it to 0 when starting playback to ensure fresh preview
     }
-  }, [shouldShowVideo, videoUrl, isVideo]);
+  }, [shouldShowVideo, videoUrl, isVideo, media.id, supportsHover, isHovering, isMobile, shouldMobileAutoplay]);
 
   const meta = useMemo(() => {
     const downloads = Number(media.downloads) || 0;
@@ -243,8 +299,9 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
               ref={videoRef}
               src={videoUrl}
               poster={safeThumbnail}
-              muted
-              playsInline
+              muted={true}
+              playsInline={true}
+              autoPlay={isMobile && !supportsHover && shouldMobileAutoplay}
               crossOrigin="anonymous"
               preload={shouldPreloadVideo ? "metadata" : "none"}
               controlsList="nodownload noplaybackrate nopictureinpicture"
