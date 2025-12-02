@@ -34,3 +34,17 @@ server/data/*.sqlite
 
 # Allow tracking the README.md file for documentation
 !server/data/README.md
+
+# Android keystore files (contain sensitive signing keys)
+*.jks
+*.keystore
+
+# Environment files (may contain secrets)
+.env.production
+.env.local
+.env*.local
+
+# Build artifacts and zip files
+*.zip
+*.apk
+*.aab

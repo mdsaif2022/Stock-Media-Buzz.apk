@@ -1,0 +1,8 @@
+# Keystore Configuration for Signing Release APK/Bundle
+# Copy this file to key.properties and fill in your values
+
+storePassword=YOUR_KEYSTORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=freemediabuzz
+storeFile=../../freemediabuzz-release-key.jks
+

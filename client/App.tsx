@@ -26,10 +26,12 @@ import AdminAnalytics from "./pages/admin/Analytics";
 import AdminUsers from "./pages/admin/Users";
 import AdminSettings from "./pages/admin/Settings";
 import React, { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { ADMIN_BASE_PATH } from "./constants/routes";
 import { apiFetch } from "@/lib/api";
 import ScrollToTop from "@/components/ScrollToTop";
 import NavigationMonitor from "@/components/NavigationMonitor";
+import { App as CapacitorApp } from "@capacitor/app";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,6 +79,28 @@ function AppRoutes() {
 }
 
 export default function App() {
+  const navigate = useNavigate();
+
+  // Handle native Android back button
+  useEffect(() => {
+    // Only register listener if Capacitor is available (native app)
+    if (typeof window !== 'undefined' && (window as any).Capacitor) {
+      const listener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+        if (canGoBack && window.history.length > 1) {
+          // Let React Router handle navigation
+          navigate(-1);
+        } else {
+          // Exit app if at root (Android standard behavior)
+          CapacitorApp.exitApp();
+        }
+      });
+
+      return () => {
+        listener.remove();
+      };
+    }
+  }, [navigate]);
+
   useEffect(() => {
     apiFetch("/api/settings/branding")
       .then((res) => res.json())

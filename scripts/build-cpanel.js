@@ -9,6 +9,8 @@ const rootDir = join(__dirname, '..');
 
 const htaccessSource = join(rootDir, 'public', '.htaccess');
 const htaccessDest = join(rootDir, 'dist', 'spa', '.htaccess');
+const manifestSource = join(rootDir, 'public', 'manifest.json');
+const manifestDest = join(rootDir, 'dist', 'spa', 'manifest.json');
 
 // Check for environment variables
 const envProdPath = join(rootDir, '.env.production');
@@ -46,6 +48,16 @@ if (existsSync(htaccessSource)) {
   }
 } else {
   console.warn('⚠️  .htaccess not found in public folder');
+}
+
+// Copy manifest.json to dist/spa
+if (existsSync(manifestSource)) {
+  try {
+    copyFileSync(manifestSource, manifestDest);
+    console.log('✅ manifest.json copied to dist/spa/');
+  } catch (error) {
+    console.error('❌ Error copying manifest.json:', error.message);
+  }
 }
 
 console.log('\n📦 cPanel build complete!');

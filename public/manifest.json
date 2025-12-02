@@ -1,0 +1,42 @@
+{
+  "name": "FreeMediaBuzz",
+  "short_name": "FreeMediaBuzz",
+  "description": "Download unlimited videos, images, audio, templates, and APKs completely free.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#8b5cf6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["entertainment", "media", "downloads"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Browse Media",
+      "short_name": "Browse",
+      "description": "Browse all media content",
+      "url": "/browse",
+      "icons": [{ "src": "/favicon.ico", "sizes": "48x48" }]
+    },
+    {
+      "name": "Categories",
+      "short_name": "Categories",
+      "description": "Browse by category",
+      "url": "/categories",
+      "icons": [{ "src": "/favicon.ico", "sizes": "48x48" }]
+    }
+  ]
+}
+
