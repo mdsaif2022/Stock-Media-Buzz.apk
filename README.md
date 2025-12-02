@@ -14,6 +14,7 @@ A comprehensive full-stack stock media platform built with React, TypeScript, Ex
 
 - **Media Preview & Interaction**
   - Video hover preview with auto-play on hover
+  - Mobile autoplay preview with viewport detection
   - Video thumbnail generation and display
   - Custom video player with seek controls (single click: ±10s, double-click: ±30s)
   - Audio player with waveform visualization
@@ -81,6 +82,7 @@ A comprehensive full-stack stock media platform built with React, TypeScript, Ex
   - TypeScript for type safety
   - Vite for fast development and building
   - Single-page application with client-side routing
+  - Native Android app support via Capacitor
 
 - **UI/UX**
   - Fully responsive design (mobile, tablet, desktop)
@@ -94,7 +96,7 @@ A comprehensive full-stack stock media platform built with React, TypeScript, Ex
   - Express.js server
   - Integrated with Vite dev server (single port)
   - RESTful API architecture
-  - JSON-based data storage (can be migrated to database)
+  - Persistent storage with Vercel KV/Upstash Redis or file storage
   - File upload handling with Multer
   - Cloudinary integration for media storage
 
@@ -118,12 +120,14 @@ A comprehensive full-stack stock media platform built with React, TypeScript, Ex
 - **State Management**: React Query (TanStack Query)
 - **Forms**: React Hook Form + Zod validation
 - **Charts**: Recharts
+- **Native**: Capacitor (Android/iOS support)
 
 ### Backend
 - **Runtime**: Node.js
 - **Framework**: Express.js 5
 - **File Upload**: Multer
 - **Cloud Storage**: Cloudinary
+- **Database**: Vercel KV/Upstash Redis (production) or File storage (development)
 - **Validation**: Zod
 
 ### Development Tools
@@ -151,11 +155,15 @@ Stock-Media/
 │
 ├── server/                # Express API backend
 │   ├── routes/           # API route handlers
-│   ├── data/            # JSON database files
+│   ├── data/            # JSON database files (dev only)
+│   ├── utils/           # Database abstraction layer
 │   └── config/          # Configuration files
 │
 ├── shared/               # Shared TypeScript types
 │   └── api.ts           # API interfaces
+│
+├── android/              # Android native app (Capacitor)
+│   └── app/             # Android app configuration
 │
 └── public/              # Static assets
 ```
@@ -165,12 +173,13 @@ Stock-Media/
 ### Prerequisites
 - Node.js 18+ 
 - PNPM (recommended) or npm
+- Android Studio (for building Android APK)
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone <your-repo-url>
+   git clone https://github.com/mdsaif2022/Stock-Media-Buzz.apk.git
    cd Stock-Media
    ```
 
@@ -219,10 +228,12 @@ pnpm build            # Production build (client + server)
 pnpm build:client      # Build frontend only
 pnpm build:server      # Build backend only
 pnpm build:cpanel      # Build frontend for cPanel (includes .htaccess)
+pnpm build:android     # Build frontend and sync with Android project
 pnpm start            # Start production server
 pnpm test             # Run tests
 pnpm typecheck        # TypeScript type checking
 pnpm format.fix        # Format code with Prettier
+pnpm open:android     # Open Android project in Android Studio
 ```
 
 ## 📱 Routes
@@ -272,6 +283,8 @@ Configure Firebase in `client/lib/firebase.ts` for user authentication.
 - `POST /api/media` - Create media (admin only)
 - `PUT /api/media/:id` - Update media (admin only)
 - `DELETE /api/media/:id` - Delete media (admin only)
+- `POST /api/media/sync-cloudinary` - Sync media from Cloudinary
+- `POST /api/media/clean-descriptions` - Clean media descriptions
 
 ### Downloads
 - `GET /api/download/proxy/:mediaId` - Proxy download with CORS handling
@@ -313,6 +326,24 @@ pnpm build:cpanel  # Build frontend with .htaccess for cPanel
 ```
 This creates optimized static files in `dist/spa/` ready for cPanel upload.
 
+### Build Android APK
+
+1. **Prepare the build**
+   ```bash
+   pnpm build:android
+   ```
+
+2. **Open in Android Studio**
+   ```bash
+   pnpm open:android
+   ```
+
+3. **Build APK/AAB in Android Studio**
+   - Build → Build Bundle(s) / APK(s) → Build APK(s)
+   - For Play Store: Build → Generate Signed Bundle / APK
+
+See `BUILD_APK_GUIDE.md` and `SIGN_APK_FOR_PLAY_STORE.md` for detailed instructions.
+
 ### Deployment Options
 
 #### cPanel Deployment (Recommended for Static Hosting)
@@ -334,6 +365,7 @@ This creates optimized static files in `dist/spa/` ready for cPanel upload.
 - CORS is configured to only allow requests from your production domain
 - API keys and secrets should never be committed to version control
 - Use environment variables for all sensitive configuration
+- Keystore files (`.jks`, `.keystore`) are excluded from version control
 
 ## 🗄️ Data Persistence
 
@@ -344,6 +376,23 @@ The platform supports multiple storage backends:
 - **Development**: Uses local file storage (`server/data/`)
 
 All media metadata is synced from Cloudinary and stored in the configured database. To sync existing Cloudinary files, use the sync endpoint (see `SYNC_CLOUDINARY_RENDER.md`).
+
+## 📱 Native Android App
+
+The platform includes native Android app support via Capacitor:
+
+- **Configuration**: `capacitor.config.ts`
+- **Android Project**: `android/`
+- **Back Button**: Handled automatically in the app
+- **API Connectivity**: Automatically configured for native environment
+
+### Building the Android App
+
+1. Build the frontend: `pnpm build:android`
+2. Open in Android Studio: `pnpm open:android`
+3. Build APK/AAB in Android Studio
+
+See `BUILD_APK_GUIDE.md` for complete instructions.
 
 ## 🤝 Contributing
 
@@ -364,6 +413,10 @@ This project is private and proprietary. All rights reserved.
 - **`RENDER_ENV_VARIABLES.md`** - Backend environment variables setup for Render
 - **`SYNC_CLOUDINARY_RENDER.md`** - How to sync Cloudinary media to your database
 
+### Android App
+- **`BUILD_APK_GUIDE.md`** - Guide to build Android APK
+- **`SIGN_APK_FOR_PLAY_STORE.md`** - Guide to sign APK for Play Store distribution
+
 ### Configuration
 - **`ENVIRONMENT_VARIABLES.md`** - Complete environment variables reference
 - **`ADMIN_MEDIA_GUIDE.md`** - Admin guide for managing media content
@@ -372,6 +425,7 @@ This project is private and proprietary. All rights reserved.
 - **`FIREBASE_DOMAIN_SETUP.md`** - Firebase authentication setup
 - **`NAVIGATION_GUIDE.md`** - Navigation and routing information
 - **`BACK_BUTTON_FIX.md`** - Browser navigation fixes
+- **`FIX_APP_ISSUES.md`** - Troubleshooting Android app issues
 
 ## 👥 Support
 
@@ -383,6 +437,7 @@ For support, email support@yourdomain.com or open an issue in the repository.
 - UI components from [Radix UI](https://www.radix-ui.com/)
 - Icons from [Lucide](https://lucide.dev/)
 - Styling with [Tailwind CSS](https://tailwindcss.com/)
+- Native app support via [Capacitor](https://capacitorjs.com/)
 
 ---
 
