@@ -2,6 +2,7 @@ import "./global.css";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import { setupBackNavigationDetector } from "./utils/backNavigationDetector";
+import { setupInteractionTracking } from "./utils/userInteractionTracker";
 
 // Initialize theme immediately to prevent flash of unstyled content
 (function initializeTheme() {
@@ -127,6 +128,10 @@ if (typeof window !== "undefined") {
   // CRITICAL: Setup back navigation detector FIRST
   // This must run before React Router initializes to catch popstate events early
   setupBackNavigationDetector();
+  
+  // Setup user interaction tracking for mobile autoplay
+  // iOS Safari requires user interaction before allowing autoplay
+  setupInteractionTracking();
   // Suppress console warnings from ad iframes (not our code)
   // Set this up BEFORE loading Adsterra to catch early errors
   const originalWarn = console.warn;

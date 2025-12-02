@@ -7,6 +7,7 @@ import { useInView } from "@/hooks/useInView";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useMobileAutoplay } from "@/hooks/useMobileAutoplay";
 import { activateVideo, deactivateVideo, registerVideo, unregisterVideo } from "@/utils/videoManager";
+import { hasUserInteractedWithPage, markUserInteraction } from "@/utils/userInteractionTracker";
 import { cn } from "@/lib/utils";
 
 interface VideoCardProps {
@@ -21,14 +22,16 @@ const FALLBACK_VIDEO_THUMBNAIL = "https://placehold.co/640x360?text=Video";
 
 export function VideoCard({ media, to, variant = "detailed", className }: VideoCardProps) {
   const cardRef = useRef<HTMLAnchorElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const isInView = useInView(cardRef, { threshold: 0.4 });
   const supportsHover = useSupportsHover();
   const isMobile = useIsMobile();
 
   // Mobile autoplay detection - triggers when video enters center viewport
-  const shouldMobileAutoplay = useMobileAutoplay(cardRef, isMobile && !supportsHover, {
-    threshold: 0.5, // 50% of video must be visible
+  // Use video container ref for more accurate detection
+  const shouldMobileAutoplay = useMobileAutoplay(videoContainerRef, isMobile && !supportsHover, {
+    threshold: 0.3, // 30% of video must be visible (lowered for easier trigger)
   });
 
   const [isHovering, setIsHovering] = useState(false);
@@ -173,6 +176,19 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
     const video = videoRef.current;
     if (!video || !isVideo || !videoUrl) return;
 
+    // Debug logging for mobile autoplay (always show on mobile to help debug)
+    if (isMobile && !supportsHover) {
+      console.log('[VideoCard] Mobile autoplay state:', {
+        mediaId: media.id,
+        isMobile,
+        supportsHover,
+        shouldMobileAutoplay,
+        shouldShowVideo,
+        videoReady: video.readyState,
+        videoPaused: video.paused,
+      });
+    }
+
     if (shouldShowVideo) {
       // Should play: Desktop hover OR mobile autoplay
       const tryPlay = async () => {
@@ -187,18 +203,47 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
           // Ensure video has required attributes for mobile autoplay
           video.muted = true;
           video.playsInline = true;
+          video.setAttribute('muted', 'true');
+          video.setAttribute('playsinline', 'true');
+          
+          // For mobile, also try setting autoplay attribute
+          if (isMobile && !supportsHover) {
+            video.setAttribute('autoplay', 'true');
+          }
+          
+          // On mobile, ensure user has interacted first (required for iOS Safari)
+          if (isMobile && !supportsHover && !hasUserInteractedWithPage()) {
+            console.log("[VideoCard] Waiting for user interaction before autoplay");
+            // User hasn't interacted yet - wait for interaction
+            // The scroll event will mark interaction and retry
+            return;
+          }
           
           // If video has enough data, play immediately
           if (video.readyState >= 2) { // HAVE_CURRENT_DATA
             setIsPreviewReady(true);
-            await video.play().catch((err) => {
-              // Autoplay blocked - show thumbnail instead
-              setPreviewError(false); // Don't mark as error, just can't autoplay
-              deactivateVideo(media.id);
-              if (process.env.NODE_ENV === 'development') {
-                console.warn("Video autoplay blocked:", err);
-              }
-            });
+            const playPromise = video.play();
+            if (playPromise !== undefined) {
+              await playPromise
+                .then(() => {
+                  // Success - mark interaction for future videos
+                  if (isMobile && !supportsHover) {
+                    markUserInteraction();
+                  }
+                  console.log("[VideoCard] Video playing successfully:", media.id);
+                })
+                .catch((err) => {
+                  // Autoplay blocked - show thumbnail instead
+                  setPreviewError(false); // Don't mark as error, just can't autoplay
+                  deactivateVideo(media.id);
+                  console.warn("[VideoCard] Video autoplay blocked:", err, {
+                    mediaId: media.id,
+                    isMobile,
+                    readyState: video.readyState,
+                    hasInteracted: hasUserInteractedWithPage(),
+                  });
+                });
+            }
           } else {
             // Wait for video to load, then play
             const handleCanPlay = async () => {
@@ -206,18 +251,21 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
                 // Always start from beginning for consistent preview experience
                 video.currentTime = 0;
                 setIsPreviewReady(true);
-                await video.play().catch((err) => {
-                  // Autoplay blocked - show thumbnail instead
-                  deactivateVideo(media.id);
-                  if (process.env.NODE_ENV === 'development') {
-                    console.warn("Video autoplay blocked:", err);
-                  }
-                });
+                const playPromise = video.play();
+                if (playPromise !== undefined) {
+                  await playPromise.catch((err) => {
+                    // Autoplay blocked - show thumbnail instead
+                    deactivateVideo(media.id);
+                    if (process.env.NODE_ENV === 'development') {
+                      console.warn("[VideoCard] Video autoplay blocked on canplay:", err);
+                    }
+                  });
+                }
               } catch (err) {
                 // Silently handle autoplay errors
                 deactivateVideo(media.id);
                 if (process.env.NODE_ENV === 'development') {
-                  console.warn("Video play error:", err);
+                  console.warn("[VideoCard] Video play error:", err);
                 }
               }
             };
@@ -231,7 +279,7 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
           // Silently handle errors
           deactivateVideo(media.id);
           if (process.env.NODE_ENV === 'development') {
-            console.warn("Video play error:", err);
+            console.warn("[VideoCard] Video play error (outer):", err);
           }
         }
       };
@@ -247,6 +295,11 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
       // Should pause: Not hovering (desktop) OR left center viewport (mobile)
       deactivateVideo(media.id);
       video.pause();
+      
+      // Remove autoplay attribute when pausing
+      if (isMobile && !supportsHover) {
+        video.removeAttribute('autoplay');
+      }
       
       // Reset preview state
       setIsPreviewReady(false);
@@ -292,7 +345,7 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
       }}
       onFocus={() => setIsHovering(false)}
     >
-      <div className="relative aspect-video bg-slate-900">
+      <div ref={videoContainerRef} className="relative aspect-video bg-slate-900">
         {media.fileUrl && isVideo ? (
           <>
             <video
@@ -301,7 +354,7 @@ export function VideoCard({ media, to, variant = "detailed", className }: VideoC
               poster={safeThumbnail}
               muted={true}
               playsInline={true}
-              autoPlay={isMobile && !supportsHover && shouldMobileAutoplay}
+              autoPlay={false}
               crossOrigin="anonymous"
               preload={shouldPreloadVideo ? "metadata" : "none"}
               controlsList="nodownload noplaybackrate nopictureinpicture"
