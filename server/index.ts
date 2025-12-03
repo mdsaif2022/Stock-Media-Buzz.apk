@@ -34,21 +34,31 @@ export function createServer() {
   app.use(
     cors({
       origin: (origin, callback) => {
+        // Allow requests with no origin (mobile apps, Postman, etc.)
         if (!origin) {
+          console.log('[CORS] Allowing request with no origin (mobile app or direct request)');
           callback(null, true);
           return;
         }
+
+        // Log the origin for debugging
+        console.log(`[CORS] Request from origin: ${origin}`);
 
         const isExplicitlyAllowed = allowedOrigins.includes(origin);
         const matchesLocalPattern = localOriginPatterns.some((pattern) => pattern.test(origin));
 
         if (isExplicitlyAllowed || matchesLocalPattern) {
+          console.log(`[CORS] ✅ Allowed origin: ${origin}`);
           callback(null, true);
         } else {
+          console.warn(`[CORS] ❌ Blocked origin: ${origin}`);
+          console.warn(`[CORS] Allowed origins:`, allowedOrigins);
           callback(new Error("Not allowed by CORS"));
         }
       },
       credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
     })
   );
   app.use(express.json());

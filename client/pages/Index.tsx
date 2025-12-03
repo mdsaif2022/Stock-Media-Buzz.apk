@@ -33,9 +33,17 @@ export default function Index() {
         if (response.ok) {
           const data = await response.json();
           setTrendingMedia(data || []);
+        } else {
+          console.error("Failed to fetch trending media:", response.status, response.statusText);
+          const errorText = await response.text().catch(() => 'Unknown error');
+          console.error("Error details:", errorText);
         }
       } catch (error) {
         console.error("Failed to fetch trending media:", error);
+        if (error instanceof Error) {
+          console.error("Error message:", error.message);
+          console.error("Error name:", error.name);
+        }
       } finally {
         setIsLoading(false);
       }
