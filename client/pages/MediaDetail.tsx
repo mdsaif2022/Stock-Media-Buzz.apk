@@ -434,7 +434,8 @@ export default function MediaDetail() {
       
       // Use API_BASE_URL to get the correct API URL in production (handles Render backend)
       const proxyPath = `/api/download/proxy/${media.id}`;
-      const proxyUrl = API_BASE_URL ? `${API_BASE_URL}${proxyPath}` : proxyPath;
+      const apiBaseUrl = API_BASE_URL();
+      const proxyUrl = apiBaseUrl ? `${apiBaseUrl}${proxyPath}` : proxyPath;
       
       // Adsterra links - all 20 links
       const adsterraLinks = [

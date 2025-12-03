@@ -22,14 +22,32 @@ async function getRedis() {
   const hasVercelKV = process.env.KV_URL || process.env.STORAGE_URL;
   const hasVercelKVFull = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
   
+  // Debug logging for environment variables
+  if (process.env.NODE_ENV !== 'production' || process.env.DEBUG_DB) {
+    console.log('[DB Debug] Environment check:', {
+      hasUpstashEnv,
+      hasUpstashUrl: !!process.env.UPSTASH_REDIS_REST_URL,
+      hasUpstashToken: !!process.env.UPSTASH_REDIS_REST_TOKEN,
+      upstashUrlLength: process.env.UPSTASH_REDIS_REST_URL?.length || 0,
+      upstashTokenLength: process.env.UPSTASH_REDIS_REST_TOKEN?.length || 0,
+      hasVercelKV,
+      hasVercelKVFull,
+    });
+  }
+  
   if (hasUpstashEnv) {
     try {
+      console.log('[DB] Initializing Upstash Redis...');
       // Use Upstash Redis SDK (recommended for Upstash Redis)
       const { Redis } = await import("@upstash/redis");
       redis = Redis.fromEnv();
+      console.log('[DB] Upstash Redis client created successfully');
       return redis;
     } catch (error) {
-      console.error("Failed to initialize Upstash Redis:", error);
+      console.error("❌ Failed to initialize Upstash Redis:", error);
+      if (error instanceof Error) {
+        console.error("Error details:", error.message, error.stack);
+      }
       return null;
     }
   } else if (hasVercelKVFull) {
@@ -289,6 +307,10 @@ export async function initializeKV() {
       }
     }
   } else {
+    // Check what's missing
+    const hasUrl = !!process.env.UPSTASH_REDIS_REST_URL;
+    const hasToken = !!process.env.UPSTASH_REDIS_REST_TOKEN;
+    
     if (isVercel) {
       console.error("⚠️  ⚠️  ⚠️  WARNING: Running on Vercel but Redis/KV is not configured!");
       console.error("⚠️  Your data will NOT persist. Please set up Upstash Redis:");
@@ -296,7 +318,15 @@ export async function initializeKV() {
       console.error("⚠️  2. Add to your project");
       console.error("⚠️  3. Redeploy");
     } else {
-      console.log("📁 Using file storage (localhost mode)");
+      if (!hasUrl || !hasToken) {
+        console.log("📁 Using file storage (localhost mode)");
+        console.log("💡 To enable Redis persistence, set these environment variables:");
+        if (!hasUrl) console.log("   - UPSTASH_REDIS_REST_URL");
+        if (!hasToken) console.log("   - UPSTASH_REDIS_REST_TOKEN");
+      } else {
+        console.log("⚠️  UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are set, but Redis client failed to initialize");
+        console.log("⚠️  Falling back to file storage");
+      }
     }
   }
 }
